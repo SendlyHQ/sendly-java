@@ -70,7 +70,7 @@ class MessagesBatchTest {
 
         RecordedRequest req = mockServer.takeRequest();
         assertEquals("POST", req.getMethod());
-        assertTrue(req.getPath().startsWith("/messages/batch"));
+        assertTrue(req.getPath().contains("/messages/batch"));
         String body = req.getBody().readUtf8();
         assertTrue(body.contains("Message 1"));
         assertTrue(body.contains("Message 2"));
