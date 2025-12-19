@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html","k":"18"},{"l":"com.sendly"},{"l":"com.sendly.exceptions"},{"l":"com.sendly.models"},{"l":"com.sendly.resources"},{"l":"com.sendly.webhooks"}];updateSearchResults();
