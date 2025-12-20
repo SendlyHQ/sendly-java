@@ -15,7 +15,7 @@ import java.util.List;
 public class BatchMessageResponse {
     public static final String STATUS_PROCESSING = "processing";
     public static final String STATUS_COMPLETED = "completed";
-    public static final String STATUS_PARTIALLY_COMPLETED = "partially_completed";
+    public static final String STATUS_PARTIAL_FAILURE = "partial_failure";
     public static final String STATUS_FAILED = "failed";
 
     private final String batchId;
@@ -120,8 +120,8 @@ public class BatchMessageResponse {
     /**
      * Check if the batch completed with some failures.
      */
-    public boolean isPartiallyCompleted() {
-        return STATUS_PARTIALLY_COMPLETED.equals(status);
+    public boolean isPartialFailure() {
+        return STATUS_PARTIAL_FAILURE.equals(status);
     }
 
     /**

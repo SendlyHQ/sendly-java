@@ -151,7 +151,7 @@ public class TestHelpers {
         if (queued == 0) {
             status = "failed";
         } else if (failed > 0) {
-            status = "partially_completed";
+            status = "partial_failure";
         } else {
             status = "completed";
         }

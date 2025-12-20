@@ -65,7 +65,7 @@ class MessagesBatchTest {
         assertEquals(0, response.getFailed());
         assertEquals(3, response.getCreditsUsed());
         assertTrue(response.isCompleted());
-        assertFalse(response.isPartiallyCompleted());
+        assertFalse(response.isPartialFailure());
         assertFalse(response.isFailed());
 
         RecordedRequest req = mockServer.takeRequest();
@@ -101,7 +101,7 @@ class MessagesBatchTest {
         assertEquals(3, response.getQueued());
         assertEquals(2, response.getFailed());
         assertEquals(5, response.getMessages().size());
-        assertTrue(response.isPartiallyCompleted());
+        assertTrue(response.isPartialFailure());
 
         // Check individual message results - first 3 succeed, last 2 fail (per mock)
         List<BatchMessageResult> results = response.getMessages();
@@ -428,7 +428,7 @@ class MessagesBatchTest {
         BatchMessageResponse processing = client.messages().getBatch("batch_1");
         assertTrue(processing.isProcessing());
         assertFalse(processing.isCompleted());
-        assertFalse(processing.isPartiallyCompleted());
+        assertFalse(processing.isPartialFailure());
         assertFalse(processing.isFailed());
 
         mockServer.enqueue(TestHelpers.mockSuccess(
@@ -437,14 +437,14 @@ class MessagesBatchTest {
         BatchMessageResponse completed = client.messages().getBatch("batch_2");
         assertTrue(completed.isCompleted());
         assertFalse(completed.isProcessing());
-        assertFalse(completed.isPartiallyCompleted());
+        assertFalse(completed.isPartialFailure());
         assertFalse(completed.isFailed());
 
         mockServer.enqueue(TestHelpers.mockSuccess(
-            "{\"batch_id\":\"batch_3\",\"status\":\"partially_completed\",\"total\":5,\"queued\":3,\"failed\":2,\"credits_used\":3,\"messages\":[],\"created_at\":\"2025-01-15T10:00:00.000Z\"}"
+            "{\"batch_id\":\"batch_3\",\"status\":\"partial_failure\",\"total\":5,\"queued\":3,\"failed\":2,\"credits_used\":3,\"messages\":[],\"created_at\":\"2025-01-15T10:00:00.000Z\"}"
         ));
         BatchMessageResponse partial = client.messages().getBatch("batch_3");
-        assertTrue(partial.isPartiallyCompleted());
+        assertTrue(partial.isPartialFailure());
         assertFalse(partial.isCompleted());
         assertFalse(partial.isProcessing());
         assertFalse(partial.isFailed());
@@ -456,7 +456,7 @@ class MessagesBatchTest {
         assertTrue(failed.isFailed());
         assertFalse(failed.isCompleted());
         assertFalse(failed.isProcessing());
-        assertFalse(failed.isPartiallyCompleted());
+        assertFalse(failed.isPartialFailure());
     }
 
     @Test
