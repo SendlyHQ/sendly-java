@@ -8,6 +8,7 @@ public class ScheduleMessageRequest {
     private final String text;
     private final String scheduledAt;
     private final String from;
+    private final String messageType;
 
     /**
      * Create a new schedule message request.
@@ -17,7 +18,7 @@ public class ScheduleMessageRequest {
      * @param scheduledAt ISO 8601 datetime for delivery (must be at least 1 minute in the future)
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt) {
-        this(to, text, scheduledAt, null);
+        this(to, text, scheduledAt, null, null);
     }
 
     /**
@@ -29,10 +30,24 @@ public class ScheduleMessageRequest {
      * @param from        Optional sender ID
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt, String from) {
+        this(to, text, scheduledAt, from, null);
+    }
+
+    /**
+     * Create a new schedule message request with sender ID and message type.
+     *
+     * @param to          Recipient phone number in E.164 format
+     * @param text        Message content
+     * @param scheduledAt ISO 8601 datetime for delivery (must be at least 1 minute in the future)
+     * @param from        Optional sender ID
+     * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
+     */
+    public ScheduleMessageRequest(String to, String text, String scheduledAt, String from, String messageType) {
         this.to = to;
         this.text = text;
         this.scheduledAt = scheduledAt;
         this.from = from;
+        this.messageType = messageType;
     }
 
     public String getTo() {
@@ -51,6 +66,10 @@ public class ScheduleMessageRequest {
         return from;
     }
 
+    public String getMessageType() {
+        return messageType;
+    }
+
     /**
      * Create a builder for ScheduleMessageRequest.
      */
@@ -66,6 +85,7 @@ public class ScheduleMessageRequest {
         private String text;
         private String scheduledAt;
         private String from;
+        private String messageType;
 
         public Builder to(String to) {
             this.to = to;
@@ -87,8 +107,18 @@ public class ScheduleMessageRequest {
             return this;
         }
 
+        /**
+         * Set the message type.
+         *
+         * @param messageType "marketing" (default, subject to quiet hours) or "transactional" (24/7)
+         */
+        public Builder messageType(String messageType) {
+            this.messageType = messageType;
+            return this;
+        }
+
         public ScheduleMessageRequest build() {
-            return new ScheduleMessageRequest(to, text, scheduledAt, from);
+            return new ScheduleMessageRequest(to, text, scheduledAt, from, messageType);
         }
     }
 }
