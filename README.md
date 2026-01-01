@@ -80,7 +80,7 @@ import java.time.Duration;
 
 Sendly client = new Sendly("sk_live_v1_xxx", 
     new Sendly.Builder()
-        .baseUrl("https://api.sendly.live/v1")
+        .baseUrl("https://sendly.live/api/v1")
         .timeout(Duration.ofSeconds(60))
         .maxRetries(5)
 );
