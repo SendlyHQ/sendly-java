@@ -11,7 +11,7 @@
 
     <name>Sendly Java SDK</name>
     <description>Official Java SDK for the Sendly SMS API</description>
-    <url>https://github.com/sendly-live/sendly-java</url>
+    <url>https://github.com/SendlyHQ/sendly-java</url>
 
     <licenses>
         <license>
@@ -30,9 +30,9 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git://github.com/sendly-live/sendly-java.git</connection>
-        <developerConnection>scm:git:ssh://github.com:sendly-live/sendly-java.git</developerConnection>
-        <url>https://github.com/sendly-live/sendly-java/tree/main</url>
+        <connection>scm:git:git://github.com/SendlyHQ/sendly-java.git</connection>
+        <developerConnection>scm:git:ssh://github.com:SendlyHQ/sendly-java.git</developerConnection>
+        <url>https://github.com/SendlyHQ/sendly-java/tree/main</url>
     </scm>
 
     <properties>
