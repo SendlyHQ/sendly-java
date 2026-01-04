@@ -1,3 +1,12 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/SendlyHQ/sendly-java/main/.github/header.svg" alt="Sendly Java SDK" />
+</p>
+
+<p align="center">
+  <a href="https://central.sonatype.com/artifact/com.sendly/sendly-java"><img src="https://img.shields.io/maven-central/v/com.sendly/sendly-java?style=flat-square" alt="Maven Central" /></a>
+  <a href="https://github.com/SendlyHQ/sendly-java/blob/main/LICENSE"><img src="https://img.shields.io/github/license/SendlyHQ/sendly-java?style=flat-square" alt="license" /></a>
+</p>
+
 # Sendly Java SDK
 
 Official Java SDK for the Sendly SMS API.
