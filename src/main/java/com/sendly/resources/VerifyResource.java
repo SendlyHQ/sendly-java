@@ -11,9 +11,15 @@ import java.util.Map;
  */
 public class VerifyResource {
     private final Sendly client;
+    private final SessionsResource sessions;
 
     public VerifyResource(Sendly client) {
         this.client = client;
+        this.sessions = new SessionsResource(client);
+    }
+
+    public SessionsResource sessions() {
+        return sessions;
     }
 
     /**
