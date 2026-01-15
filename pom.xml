@@ -6,7 +6,7 @@
 
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>3.12.2</version>
+    <version>3.12.3</version>
     <packaging>jar</packaging>
 
     <name>Sendly Java SDK</name>
