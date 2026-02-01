@@ -13,6 +13,8 @@ import com.sendly.models.CreateContactRequest;
 import com.sendly.models.ListContactsRequest;
 import com.sendly.models.UpdateContactListRequest;
 import com.sendly.models.UpdateContactRequest;
+import com.sendly.models.ImportContactsRequest;
+import com.sendly.models.ImportContactsResponse;
 
 import java.util.List;
 import java.util.Map;
@@ -69,5 +71,13 @@ public class ContactsResource {
             throw new ValidationException("Contact ID is required");
         }
         client.delete("/contacts/" + id);
+    }
+
+    public ImportContactsResponse importContacts(ImportContactsRequest request) throws SendlyException {
+        if (request.getContacts() == null || request.getContacts().isEmpty()) {
+            throw new ValidationException("Contacts list is required");
+        }
+        JsonObject response = client.post("/contacts/import", request);
+        return new ImportContactsResponse(response);
     }
 }
