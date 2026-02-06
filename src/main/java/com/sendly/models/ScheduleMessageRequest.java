@@ -1,5 +1,7 @@
 package com.sendly.models;
 
+import java.util.Map;
+
 /**
  * Request object for scheduling an SMS message.
  */
@@ -9,6 +11,7 @@ public class ScheduleMessageRequest {
     private final String scheduledAt;
     private final String from;
     private final String messageType;
+    private final Map<String, Object> metadata;
 
     /**
      * Create a new schedule message request.
@@ -18,7 +21,7 @@ public class ScheduleMessageRequest {
      * @param scheduledAt ISO 8601 datetime for delivery (must be at least 1 minute in the future)
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt) {
-        this(to, text, scheduledAt, null, null);
+        this(to, text, scheduledAt, null, null, null);
     }
 
     /**
@@ -30,7 +33,7 @@ public class ScheduleMessageRequest {
      * @param from        Optional sender ID
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt, String from) {
-        this(to, text, scheduledAt, from, null);
+        this(to, text, scheduledAt, from, null, null);
     }
 
     /**
@@ -43,11 +46,26 @@ public class ScheduleMessageRequest {
      * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt, String from, String messageType) {
+        this(to, text, scheduledAt, from, messageType, null);
+    }
+
+    /**
+     * Create a new schedule message request with sender ID, message type, and metadata.
+     *
+     * @param to          Recipient phone number in E.164 format
+     * @param text        Message content
+     * @param scheduledAt ISO 8601 datetime for delivery (must be at least 1 minute in the future)
+     * @param from        Optional sender ID
+     * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
+     * @param metadata    Custom metadata to attach to the message (max 4KB)
+     */
+    public ScheduleMessageRequest(String to, String text, String scheduledAt, String from, String messageType, Map<String, Object> metadata) {
         this.to = to;
         this.text = text;
         this.scheduledAt = scheduledAt;
         this.from = from;
         this.messageType = messageType;
+        this.metadata = metadata;
     }
 
     public String getTo() {
@@ -70,6 +88,10 @@ public class ScheduleMessageRequest {
         return messageType;
     }
 
+    public Map<String, Object> getMetadata() {
+        return metadata;
+    }
+
     /**
      * Create a builder for ScheduleMessageRequest.
      */
@@ -86,6 +108,7 @@ public class ScheduleMessageRequest {
         private String scheduledAt;
         private String from;
         private String messageType;
+        private Map<String, Object> metadata;
 
         public Builder to(String to) {
             this.to = to;
@@ -117,8 +140,18 @@ public class ScheduleMessageRequest {
             return this;
         }
 
+        /**
+         * Set custom metadata.
+         *
+         * @param metadata Custom metadata to attach to the message (max 4KB)
+         */
+        public Builder metadata(Map<String, Object> metadata) {
+            this.metadata = metadata;
+            return this;
+        }
+
         public ScheduleMessageRequest build() {
-            return new ScheduleMessageRequest(to, text, scheduledAt, from, messageType);
+            return new ScheduleMessageRequest(to, text, scheduledAt, from, messageType, metadata);
         }
     }
 }

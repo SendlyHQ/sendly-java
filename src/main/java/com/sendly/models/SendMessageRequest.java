@@ -1,5 +1,7 @@
 package com.sendly.models;
 
+import java.util.Map;
+
 /**
  * Request object for sending an SMS message.
  */
@@ -7,6 +9,7 @@ public class SendMessageRequest {
     private final String to;
     private final String text;
     private final String messageType;
+    private final Map<String, Object> metadata;
 
     /**
      * Create a new send message request.
@@ -15,7 +18,7 @@ public class SendMessageRequest {
      * @param text Message content
      */
     public SendMessageRequest(String to, String text) {
-        this(to, text, null);
+        this(to, text, null, null);
     }
 
     /**
@@ -26,9 +29,22 @@ public class SendMessageRequest {
      * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
      */
     public SendMessageRequest(String to, String text, String messageType) {
+        this(to, text, messageType, null);
+    }
+
+    /**
+     * Create a new send message request with message type and metadata.
+     *
+     * @param to          Recipient phone number in E.164 format
+     * @param text        Message content
+     * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
+     * @param metadata    Custom metadata to attach to the message (max 4KB)
+     */
+    public SendMessageRequest(String to, String text, String messageType, Map<String, Object> metadata) {
         this.to = to;
         this.text = text;
         this.messageType = messageType;
+        this.metadata = metadata;
     }
 
     public String getTo() {
@@ -41,6 +57,10 @@ public class SendMessageRequest {
 
     public String getMessageType() {
         return messageType;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return metadata;
     }
 
     /**
@@ -57,6 +77,7 @@ public class SendMessageRequest {
         private String to;
         private String text;
         private String messageType;
+        private Map<String, Object> metadata;
 
         public Builder to(String to) {
             this.to = to;
@@ -78,8 +99,18 @@ public class SendMessageRequest {
             return this;
         }
 
+        /**
+         * Set custom metadata.
+         *
+         * @param metadata Custom metadata to attach to the message (max 4KB)
+         */
+        public Builder metadata(Map<String, Object> metadata) {
+            this.metadata = metadata;
+            return this;
+        }
+
         public SendMessageRequest build() {
-            return new SendMessageRequest(to, text, messageType);
+            return new SendMessageRequest(to, text, messageType, metadata);
         }
     }
 }

@@ -5,6 +5,8 @@ import com.google.gson.annotations.SerializedName;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Represents an SMS message.
@@ -62,6 +64,8 @@ public class Message {
     @SerializedName("error_message")
     private final String errorMessage;
 
+    private final Map<String, Object> metadata;
+
     /**
      * Create a Message from a JSON object.
      */
@@ -86,6 +90,33 @@ public class Message {
         this.deliveredAt = parseInstant(getStringOrNull(json, "delivered_at", "deliveredAt"));
         this.errorCode = getStringOrNull(json, "error_code", "errorCode");
         this.errorMessage = getStringOrNull(json, "error_message", "errorMessage");
+        this.metadata = parseMetadata(json);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseMetadata(JsonObject json) {
+        if (json.has("metadata") && !json.get("metadata").isJsonNull() && json.get("metadata").isJsonObject()) {
+            Map<String, Object> result = new HashMap<>();
+            JsonObject metaObj = json.getAsJsonObject("metadata");
+            for (String key : metaObj.keySet()) {
+                if (!metaObj.get(key).isJsonNull()) {
+                    if (metaObj.get(key).isJsonPrimitive()) {
+                        var prim = metaObj.get(key).getAsJsonPrimitive();
+                        if (prim.isString()) {
+                            result.put(key, prim.getAsString());
+                        } else if (prim.isNumber()) {
+                            result.put(key, prim.getAsNumber());
+                        } else if (prim.isBoolean()) {
+                            result.put(key, prim.getAsBoolean());
+                        }
+                    } else {
+                        result.put(key, metaObj.get(key).toString());
+                    }
+                }
+            }
+            return result;
+        }
+        return null;
     }
 
     private String getStringOrNull(JsonObject json, String key) {
@@ -183,6 +214,10 @@ public class Message {
 
     public String getErrorMessage() {
         return errorMessage;
+    }
+
+    public Map<String, Object> getMetadata() {
+        return metadata;
     }
 
     // Helper methods
