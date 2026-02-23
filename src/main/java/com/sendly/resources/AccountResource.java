@@ -96,6 +96,21 @@ public class AccountResource {
         return transactions;
     }
 
+    public JsonObject transferCredits(String targetOrganizationId, int amount) throws SendlyException {
+        if (targetOrganizationId == null || targetOrganizationId.isEmpty()) {
+            throw new ValidationException("Target organization ID is required");
+        }
+        if (amount <= 0) {
+            throw new ValidationException("Amount must be a positive integer");
+        }
+
+        JsonObject body = new JsonObject();
+        body.addProperty("targetOrganizationId", targetOrganizationId);
+        body.addProperty("amount", amount);
+
+        return client.post("/credits/transfer", body);
+    }
+
     /**
      * List all API keys for the account.
      *
