@@ -127,6 +127,14 @@ public class WebhooksResource {
     }
 
     /**
+     * Reset the circuit breaker for a webhook.
+     */
+    public JsonObject resetCircuit(String webhookId) throws SendlyException {
+        validateWebhookId(webhookId);
+        return client.post("/webhooks/" + webhookId + "/reset-circuit", new JsonObject());
+    }
+
+    /**
      * Rotate the webhook signing secret.
      */
     public WebhookCreatedResponse rotateSecret(String webhookId) throws SendlyException {
