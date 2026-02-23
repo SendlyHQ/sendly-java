@@ -18,6 +18,7 @@ public class Message {
     public static final String STATUS_DELIVERED = "delivered";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_BOUNCED = "bounced";
+    public static final String STATUS_RETRYING = "retrying";
 
     // Sender type constants
     public static final String SENDER_TYPE_NUMBER_POOL = "number_pool";
@@ -64,6 +65,9 @@ public class Message {
     @SerializedName("error_message")
     private final String errorMessage;
 
+    @SerializedName("retry_count")
+    private final int retryCount;
+
     private final Map<String, Object> metadata;
 
     /**
@@ -90,6 +94,8 @@ public class Message {
         this.deliveredAt = parseInstant(getStringOrNull(json, "delivered_at", "deliveredAt"));
         this.errorCode = getStringOrNull(json, "error_code", "errorCode");
         this.errorMessage = getStringOrNull(json, "error_message", "errorMessage");
+        this.retryCount = json.has("retry_count") || json.has("retryCount") ?
+            (json.has("retry_count") ? json.get("retry_count").getAsInt() : json.get("retryCount").getAsInt()) : 0;
         this.metadata = parseMetadata(json);
     }
 
@@ -214,6 +220,10 @@ public class Message {
 
     public String getErrorMessage() {
         return errorMessage;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
     }
 
     public Map<String, Object> getMetadata() {
