@@ -1,5 +1,8 @@
 package com.sendly.models;
 
+import com.google.gson.annotations.SerializedName;
+
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -11,6 +14,9 @@ public class SendMessageRequest {
     private final String messageType;
     private final Map<String, Object> metadata;
 
+    @SerializedName("mediaUrls")
+    private final List<String> mediaUrls;
+
     /**
      * Create a new send message request.
      *
@@ -18,7 +24,7 @@ public class SendMessageRequest {
      * @param text Message content
      */
     public SendMessageRequest(String to, String text) {
-        this(to, text, null, null);
+        this(to, text, null, null, null);
     }
 
     /**
@@ -29,7 +35,7 @@ public class SendMessageRequest {
      * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
      */
     public SendMessageRequest(String to, String text, String messageType) {
-        this(to, text, messageType, null);
+        this(to, text, messageType, null, null);
     }
 
     /**
@@ -41,10 +47,24 @@ public class SendMessageRequest {
      * @param metadata    Custom metadata to attach to the message (max 4KB)
      */
     public SendMessageRequest(String to, String text, String messageType, Map<String, Object> metadata) {
+        this(to, text, messageType, metadata, null);
+    }
+
+    /**
+     * Create a new send message request with all options.
+     *
+     * @param to          Recipient phone number in E.164 format
+     * @param text        Message content
+     * @param messageType Message type: "marketing" (default, subject to quiet hours) or "transactional" (24/7)
+     * @param metadata    Custom metadata to attach to the message (max 4KB)
+     * @param mediaUrls   List of media URLs for MMS
+     */
+    public SendMessageRequest(String to, String text, String messageType, Map<String, Object> metadata, List<String> mediaUrls) {
         this.to = to;
         this.text = text;
         this.messageType = messageType;
         this.metadata = metadata;
+        this.mediaUrls = mediaUrls;
     }
 
     public String getTo() {
@@ -63,6 +83,10 @@ public class SendMessageRequest {
         return metadata;
     }
 
+    public List<String> getMediaUrls() {
+        return mediaUrls;
+    }
+
     /**
      * Create a builder for SendMessageRequest.
      */
@@ -78,6 +102,7 @@ public class SendMessageRequest {
         private String text;
         private String messageType;
         private Map<String, Object> metadata;
+        private List<String> mediaUrls;
 
         public Builder to(String to) {
             this.to = to;
@@ -109,8 +134,13 @@ public class SendMessageRequest {
             return this;
         }
 
+        public Builder mediaUrls(List<String> mediaUrls) {
+            this.mediaUrls = mediaUrls;
+            return this;
+        }
+
         public SendMessageRequest build() {
-            return new SendMessageRequest(to, text, messageType, metadata);
+            return new SendMessageRequest(to, text, messageType, metadata, mediaUrls);
         }
     }
 }

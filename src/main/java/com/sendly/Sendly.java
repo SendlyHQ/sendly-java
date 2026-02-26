@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.sendly.exceptions.*;
+import com.sendly.resources.Media;
 import com.sendly.resources.Messages;
 import com.sendly.resources.WebhooksResource;
 import com.sendly.resources.AccountResource;
@@ -40,6 +41,7 @@ public class Sendly {
     private final Gson gson;
     private final int maxRetries;
     private final Messages messages;
+    private final Media media;
     private final WebhooksResource webhooks;
     private final AccountResource account;
     private final VerifyResource verify;
@@ -82,6 +84,7 @@ public class Sendly {
                 .create();
 
         this.messages = new Messages(this);
+        this.media = new Media(this);
         this.webhooks = new WebhooksResource(this);
         this.account = new AccountResource(this);
         this.verify = new VerifyResource(this);
@@ -97,6 +100,15 @@ public class Sendly {
      */
     public Messages messages() {
         return messages;
+    }
+
+    /**
+     * Get the Media resource.
+     *
+     * @return Media resource
+     */
+    public Media media() {
+        return media;
     }
 
     /**
@@ -233,6 +245,26 @@ public class Sendly {
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "sendly-java/" + VERSION)
+                .build();
+
+        return executeWithRetry(request);
+    }
+
+    /**
+     * Make a multipart POST request.
+     *
+     * @param path        API endpoint path
+     * @param requestBody OkHttp RequestBody (multipart)
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject postMultipart(String path, RequestBody requestBody) throws SendlyException {
+        Request request = new Request.Builder()
+                .url(baseUrl + path)
+                .post(requestBody)
+                .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
                 .addHeader("User-Agent", "sendly-java/" + VERSION)
                 .build();
