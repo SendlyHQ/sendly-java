@@ -404,6 +404,73 @@ Use test API keys (`sk_test_v1_xxx`) with these test numbers:
 | +15005550004 | Fails: rate_limit_exceeded |
 | +15005550006 | Fails: carrier_violation |
 
+## Enterprise
+
+The Enterprise API lets you programmatically manage workspaces, verification, credits, and API keys for multi-tenant platforms. Requires an enterprise master key (`sk_live_v1_master_*`).
+
+### Quick Provision
+
+Create a fully configured workspace in a single call:
+
+```java
+Sendly client = new Sendly("sk_live_v1_master_YOUR_KEY");
+
+JsonObject options = new JsonObject();
+options.addProperty("name", "Acme Insurance - Austin");
+options.addProperty("sourceWorkspaceId", "ws_verified");
+options.addProperty("creditAmount", 5000);
+options.addProperty("creditSourceWorkspaceId", "ws_pool");
+options.addProperty("keyName", "Production");
+options.addProperty("keyType", "live");
+options.addProperty("generateOptInPage", true);
+
+JsonObject result = client.enterprise().provision(options);
+
+System.out.println(result.getAsJsonObject("workspace").get("id").getAsString());
+System.out.println(result.getAsJsonObject("apiKey").get("rawKey").getAsString());
+```
+
+Three provisioning modes:
+
+| Mode | Params | Description |
+|------|--------|-------------|
+| **Inherit** | `sourceWorkspaceId` | Shares toll-free number from verified workspace |
+| **Inherit + New Number** | `sourceWorkspaceId` + `inheritWithNewNumber: true` | Copies business info, purchases new number |
+| **Fresh** | `verification` object | Full business details, new number + carrier approval |
+
+### Workspace Management
+
+```java
+JsonObject ws = client.enterprise().workspaces().create("Acme Insurance");
+JsonObject list = client.enterprise().workspaces().list();
+JsonObject detail = client.enterprise().workspaces().get("ws_xxx");
+client.enterprise().workspaces().delete("ws_xxx");
+```
+
+### Credits & API Keys
+
+```java
+client.enterprise().workspaces().transferCredits("ws_dest", "ws_source", 5000);
+
+JsonObject key = client.enterprise().workspaces().createKey("ws_xxx", "Production", "live");
+System.out.println(key.get("rawKey").getAsString());
+
+client.enterprise().workspaces().revokeKey("ws_xxx", "key_abc");
+```
+
+### Webhooks & Analytics
+
+```java
+client.enterprise().webhooks().set("https://yourapp.com/webhooks");
+JsonObject overview = client.enterprise().analytics().overview();
+JsonObject messages = client.enterprise().analytics().messages("30d", null);
+JsonObject delivery = client.enterprise().analytics().delivery();
+```
+
+Full enterprise docs: [sendly.live/docs/enterprise](https://sendly.live/docs/enterprise)
+
+---
+
 ## License
 
 MIT

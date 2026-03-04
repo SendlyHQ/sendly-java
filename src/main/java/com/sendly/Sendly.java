@@ -12,6 +12,7 @@ import com.sendly.resources.VerifyResource;
 import com.sendly.resources.TemplatesResource;
 import com.sendly.resources.CampaignsResource;
 import com.sendly.resources.ContactsResource;
+import com.sendly.resources.EnterpriseResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -48,6 +49,7 @@ public class Sendly {
     private final TemplatesResource templates;
     private final CampaignsResource campaigns;
     private final ContactsResource contacts;
+    private final EnterpriseResource enterprise;
 
     /**
      * Create a new Sendly client with default settings.
@@ -91,6 +93,7 @@ public class Sendly {
         this.templates = new TemplatesResource(this);
         this.campaigns = new CampaignsResource(this);
         this.contacts = new ContactsResource(this);
+        this.enterprise = new EnterpriseResource(this);
     }
 
     /**
@@ -166,6 +169,15 @@ public class Sendly {
     }
 
     /**
+     * Get the Enterprise resource.
+     *
+     * @return Enterprise resource
+     */
+    public EnterpriseResource enterprise() {
+        return enterprise;
+    }
+
+    /**
      * Make a typed request (generic method for resources).
      *
      * @param method HTTP method (GET, POST, PATCH, DELETE)
@@ -183,6 +195,9 @@ public class Sendly {
                 break;
             case "POST":
                 response = post(path, body);
+                break;
+            case "PUT":
+                response = put(path, body);
                 break;
             case "PATCH":
                 response = patch(path, body);
@@ -243,6 +258,30 @@ public class Sendly {
         Request request = new Request.Builder()
                 .url(baseUrl + path)
                 .post(requestBody)
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "sendly-java/" + VERSION)
+                .build();
+
+        return executeWithRetry(request);
+    }
+
+    /**
+     * Make a PUT request.
+     *
+     * @param path API endpoint path
+     * @param body Request body
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject put(String path, Object body) throws SendlyException {
+        String json = gson.toJson(body);
+        RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
+
+        Request request = new Request.Builder()
+                .url(baseUrl + path)
+                .put(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
