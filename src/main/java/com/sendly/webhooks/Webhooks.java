@@ -2,6 +2,8 @@ package com.sendly.webhooks;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.annotations.SerializedName;
 
@@ -20,15 +22,16 @@ import java.security.NoSuchAlgorithmException;
  * @PostMapping("/webhooks/sendly")
  * public ResponseEntity<String> handleWebhook(
  *     @RequestBody String payload,
- *     @RequestHeader("X-Sendly-Signature") String signature
+ *     @RequestHeader("X-Sendly-Signature") String signature,
+ *     @RequestHeader(value = "X-Sendly-Timestamp", required = false) String timestamp
  * ) {
  *     try {
- *         WebhookEvent event = Webhooks.parseEvent(payload, signature, webhookSecret);
+ *         WebhookEvent event = Webhooks.parseEvent(payload, signature, webhookSecret, timestamp);
  *         System.out.println("Received event: " + event.getType());
  *
  *         switch (event.getType()) {
  *             case "message.delivered":
- *                 System.out.println("Message delivered: " + event.getData().getMessageId());
+ *                 System.out.println("Message delivered: " + event.getData().getId());
  *                 break;
  *             case "message.failed":
  *                 System.out.println("Message failed: " + event.getData().getError());
@@ -47,28 +50,42 @@ public class Webhooks {
             .setDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'")
             .create();
 
+    private static final int SIGNATURE_TOLERANCE_SECONDS = 300;
+
     /**
      * Verify webhook signature from Sendly.
      *
      * @param payload   Raw request body as string
      * @param signature X-Sendly-Signature header value
      * @param secret    Your webhook secret from dashboard
+     * @param timestamp X-Sendly-Timestamp header value (null to skip timestamp check)
      * @return true if signature is valid, false otherwise
      */
-    public static boolean verifySignature(String payload, String signature, String secret) {
+    public static boolean verifySignature(String payload, String signature, String secret, String timestamp) {
         if (payload == null || signature == null || secret == null ||
             payload.isEmpty() || signature.isEmpty() || secret.isEmpty()) {
             return false;
         }
 
         try {
+            String signedPayload;
+            if (timestamp != null && !timestamp.isEmpty()) {
+                signedPayload = timestamp + "." + payload;
+                long ts = Long.parseLong(timestamp);
+                if (Math.abs(System.currentTimeMillis() / 1000 - ts) > SIGNATURE_TOLERANCE_SECONDS) {
+                    return false;
+                }
+            } else {
+                signedPayload = payload;
+            }
+
             Mac mac = Mac.getInstance("HmacSHA256");
             SecretKeySpec secretKeySpec = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
                 "HmacSHA256"
             );
             mac.init(secretKeySpec);
-            byte[] hash = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
@@ -81,14 +98,18 @@ public class Webhooks {
 
             String expected = "sha256=" + hexString.toString();
 
-            // Timing-safe comparison
             return MessageDigest.isEqual(
                 signature.getBytes(StandardCharsets.UTF_8),
                 expected.getBytes(StandardCharsets.UTF_8)
             );
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException | NumberFormatException e) {
             return false;
         }
+    }
+
+    /** @deprecated Use {@link #verifySignature(String, String, String, String)} instead */
+    public static boolean verifySignature(String payload, String signature, String secret) {
+        return verifySignature(payload, signature, secret, null);
     }
 
     /**
@@ -97,21 +118,53 @@ public class Webhooks {
      * @param payload   Raw request body as string
      * @param signature X-Sendly-Signature header value
      * @param secret    Your webhook secret from dashboard
+     * @param timestamp X-Sendly-Timestamp header value (null to skip timestamp check)
      * @return Parsed and validated WebhookEvent
      * @throws WebhookSignatureException if signature is invalid or payload is malformed
      */
-    public static WebhookEvent parseEvent(String payload, String signature, String secret)
+    public static WebhookEvent parseEvent(String payload, String signature, String secret, String timestamp)
             throws WebhookSignatureException {
-        if (!verifySignature(payload, signature, secret)) {
+        if (!verifySignature(payload, signature, secret, timestamp)) {
             throw new WebhookSignatureException("Invalid webhook signature");
         }
 
         try {
-            WebhookEvent event = gson.fromJson(payload, WebhookEvent.class);
+            JsonObject raw = gson.fromJson(payload, JsonObject.class);
 
-            // Basic validation
-            if (event.getId() == null || event.getType() == null || event.getCreatedAt() == null) {
+            if (!raw.has("id") || !raw.has("type") || !raw.has("data")) {
                 throw new WebhookSignatureException("Invalid event structure");
+            }
+
+            JsonObject dataObj = raw.getAsJsonObject("data");
+            JsonObject msgObj = dataObj.has("object") ? dataObj.getAsJsonObject("object") : dataObj;
+
+            WebhookMessageData data = new WebhookMessageData();
+            data.id = getStringOr(msgObj, "id", getStringOr(msgObj, "message_id", ""));
+            data.status = getStringOr(msgObj, "status", "");
+            data.to = getStringOr(msgObj, "to", "");
+            data.from = getStringOr(msgObj, "from", "");
+            data.direction = getStringOr(msgObj, "direction", "outbound");
+            data.organizationId = getStringOr(msgObj, "organization_id", null);
+            data.text = getStringOr(msgObj, "text", null);
+            data.error = getStringOr(msgObj, "error", null);
+            data.errorCode = getStringOr(msgObj, "error_code", null);
+            data.deliveredAt = getStringOr(msgObj, "delivered_at", null);
+            data.failedAt = getStringOr(msgObj, "failed_at", null);
+            data.segments = getIntOr(msgObj, "segments", 1);
+            data.creditsUsed = getIntOr(msgObj, "credits_used", 0);
+            data.messageFormat = getStringOr(msgObj, "message_format", null);
+
+            WebhookEvent event = new WebhookEvent();
+            event.id = raw.get("id").getAsString();
+            event.type = raw.get("type").getAsString();
+            event.data = data;
+            event.apiVersion = getStringOr(raw, "api_version", "2024-01");
+            event.livemode = raw.has("livemode") && raw.get("livemode").getAsBoolean();
+
+            if (raw.has("created")) {
+                event.created = raw.get("created");
+            } else if (raw.has("created_at")) {
+                event.created = raw.get("created_at");
             }
 
             return event;
@@ -120,22 +173,32 @@ public class Webhooks {
         }
     }
 
+    /** @deprecated Use {@link #parseEvent(String, String, String, String)} instead */
+    public static WebhookEvent parseEvent(String payload, String signature, String secret)
+            throws WebhookSignatureException {
+        return parseEvent(payload, signature, secret, null);
+    }
+
     /**
      * Generate a webhook signature for testing purposes.
      *
-     * @param payload The payload to sign
-     * @param secret  The secret to use for signing
+     * @param payload   The payload to sign
+     * @param secret    The secret to use for signing
+     * @param timestamp Optional timestamp (null to skip)
      * @return The signature in the format "sha256=..."
      */
-    public static String generateSignature(String payload, String secret) {
+    public static String generateSignature(String payload, String secret, String timestamp) {
         try {
+            String signedPayload = (timestamp != null && !timestamp.isEmpty())
+                    ? timestamp + "." + payload : payload;
+
             Mac mac = Mac.getInstance("HmacSHA256");
             SecretKeySpec secretKeySpec = new SecretKeySpec(
                 secret.getBytes(StandardCharsets.UTF_8),
                 "HmacSHA256"
             );
             mac.init(secretKeySpec);
-            byte[] hash = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = mac.doFinal(signedPayload.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
@@ -152,15 +215,37 @@ public class Webhooks {
         }
     }
 
+    /** @deprecated Use {@link #generateSignature(String, String, String)} instead */
+    public static String generateSignature(String payload, String secret) {
+        return generateSignature(payload, secret, null);
+    }
+
+    private static String getStringOr(JsonObject obj, String key, String defaultValue) {
+        if (obj.has(key) && !obj.get(key).isJsonNull()) {
+            return obj.get(key).getAsString();
+        }
+        return defaultValue;
+    }
+
+    private static int getIntOr(JsonObject obj, String key, int defaultValue) {
+        if (obj.has(key) && !obj.get(key).isJsonNull()) {
+            return obj.get(key).getAsInt();
+        }
+        return defaultValue;
+    }
+
     /**
      * Webhook event data containing message details.
      */
     public static class WebhookMessageData {
-        @SerializedName("message_id")
-        private String messageId;
+        private String id;
         private String status;
         private String to;
         private String from;
+        private String direction;
+        @SerializedName("organization_id")
+        private String organizationId;
+        private String text;
         private String error;
         @SerializedName("error_code")
         private String errorCode;
@@ -171,17 +256,25 @@ public class Webhooks {
         private int segments;
         @SerializedName("credits_used")
         private int creditsUsed;
+        @SerializedName("message_format")
+        private String messageFormat;
 
-        public String getMessageId() { return messageId; }
+        public String getId() { return id; }
+        /** @deprecated Use {@link #getId()} instead */
+        public String getMessageId() { return id; }
         public String getStatus() { return status; }
         public String getTo() { return to; }
         public String getFrom() { return from; }
+        public String getDirection() { return direction; }
+        public String getOrganizationId() { return organizationId; }
+        public String getText() { return text; }
         public String getError() { return error; }
         public String getErrorCode() { return errorCode; }
         public String getDeliveredAt() { return deliveredAt; }
         public String getFailedAt() { return failedAt; }
         public int getSegments() { return segments; }
         public int getCreditsUsed() { return creditsUsed; }
+        public String getMessageFormat() { return messageFormat; }
     }
 
     /**
@@ -191,16 +284,21 @@ public class Webhooks {
         private String id;
         private String type;
         private WebhookMessageData data;
-        @SerializedName("created_at")
-        private String createdAt;
+        private transient JsonElement created;
         @SerializedName("api_version")
         private String apiVersion;
+        private boolean livemode;
 
         public String getId() { return id; }
         public String getType() { return type; }
         public WebhookMessageData getData() { return data; }
-        public String getCreatedAt() { return createdAt; }
+        public JsonElement getCreated() { return created; }
+        /** @deprecated Use {@link #getCreated()} instead */
+        public String getCreatedAt() {
+            return created != null ? created.getAsString() : null;
+        }
         public String getApiVersion() { return apiVersion; }
+        public boolean isLivemode() { return livemode; }
     }
 
     /**
