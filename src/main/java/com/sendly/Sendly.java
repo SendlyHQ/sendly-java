@@ -41,6 +41,7 @@ public class Sendly {
     private final OkHttpClient httpClient;
     private final Gson gson;
     private final int maxRetries;
+    private String organizationId;
     private final Messages messages;
     private final Media media;
     private final WebhooksResource webhooks;
@@ -74,6 +75,7 @@ public class Sendly {
         this.apiKey = apiKey;
         this.baseUrl = builder.baseUrl;
         this.maxRetries = builder.maxRetries;
+        this.organizationId = builder.organizationId != null ? builder.organizationId : System.getenv("SENDLY_ORG_ID");
 
         this.httpClient = new OkHttpClient.Builder()
                 .connectTimeout(builder.connectTimeout.toMillis(), TimeUnit.MILLISECONDS)
@@ -232,15 +234,17 @@ public class Sendly {
             });
         }
 
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(urlBuilder.build())
                 .get()
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -255,16 +259,18 @@ public class Sendly {
         String json = gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -279,16 +285,18 @@ public class Sendly {
         String json = gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .put(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -300,15 +308,17 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject postMultipart(String path, RequestBody requestBody) throws SendlyException {
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -323,16 +333,18 @@ public class Sendly {
         String json = gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .patch(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -343,15 +355,17 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject delete(String path) throws SendlyException {
-        Request request = new Request.Builder()
+        Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .delete()
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION)
-                .build();
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
 
-        return executeWithRetry(request);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -427,6 +441,10 @@ public class Sendly {
     /**
      * Get the Gson instance.
      */
+    public void setOrganizationId(String id) {
+        this.organizationId = id;
+    }
+
     public Gson getGson() {
         return gson;
     }
@@ -440,6 +458,7 @@ public class Sendly {
         private Duration readTimeout = DEFAULT_TIMEOUT;
         private Duration writeTimeout = DEFAULT_TIMEOUT;
         private int maxRetries = 3;
+        private String organizationId;
 
         public Builder baseUrl(String baseUrl) {
             this.baseUrl = baseUrl;
@@ -469,6 +488,11 @@ public class Sendly {
 
         public Builder maxRetries(int maxRetries) {
             this.maxRetries = maxRetries;
+            return this;
+        }
+
+        public Builder organizationId(String id) {
+            this.organizationId = id;
             return this;
         }
     }
