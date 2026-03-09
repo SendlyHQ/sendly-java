@@ -9,7 +9,7 @@
 
 # Sendly Java SDK
 
-Official Java SDK for the Sendly SMS API.
+Official Java SDK for the Sendly SMS & MMS API.
 
 ## Requirements
 
