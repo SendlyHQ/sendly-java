@@ -419,7 +419,7 @@ JsonObject options = new JsonObject();
 options.addProperty("name", "Acme Insurance - Austin");
 options.addProperty("sourceWorkspaceId", "ws_verified");
 options.addProperty("creditAmount", 5000);
-options.addProperty("creditSourceWorkspaceId", "ws_pool");
+options.addProperty("creditSourceWorkspaceId", "SOURCE_WORKSPACE_ID");
 options.addProperty("keyName", "Production");
 options.addProperty("keyType", "live");
 options.addProperty("generateOptInPage", true);
@@ -427,7 +427,7 @@ options.addProperty("generateOptInPage", true);
 JsonObject result = client.enterprise().provision(options);
 
 System.out.println(result.getAsJsonObject("workspace").get("id").getAsString());
-System.out.println(result.getAsJsonObject("apiKey").get("rawKey").getAsString());
+System.out.println(result.getAsJsonObject("key").get("key").getAsString());
 ```
 
 Three provisioning modes:
@@ -453,7 +453,7 @@ client.enterprise().workspaces().delete("ws_xxx");
 client.enterprise().workspaces().transferCredits("ws_dest", "ws_source", 5000);
 
 JsonObject key = client.enterprise().workspaces().createKey("ws_xxx", "Production", "live");
-System.out.println(key.get("rawKey").getAsString());
+System.out.println(key.get("key").getAsString());
 
 client.enterprise().workspaces().revokeKey("ws_xxx", "key_abc");
 ```
