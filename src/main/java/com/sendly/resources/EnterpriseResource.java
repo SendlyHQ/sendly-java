@@ -497,7 +497,7 @@ public class EnterpriseResource {
         }
 
         public JsonObject get() throws SendlyException {
-            return client.get("/enterprise/credits/pool", null);
+            return client.get("/enterprise/credits", null);
         }
 
         public JsonObject deposit(int amount) throws SendlyException {
@@ -515,7 +515,7 @@ public class EnterpriseResource {
                 body.addProperty("description", description);
             }
 
-            return client.post("/enterprise/credits/pool/deposit", body);
+            return client.post("/enterprise/credits/deposit", body);
         }
     }
 }
