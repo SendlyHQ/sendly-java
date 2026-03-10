@@ -18,6 +18,7 @@ public class EnterpriseResource {
     private final Analytics analytics;
     private final Settings settings;
     private final Billing billing;
+    private final Credits credits;
 
     public EnterpriseResource(Sendly client) {
         this.client = client;
@@ -26,6 +27,7 @@ public class EnterpriseResource {
         this.analytics = new Analytics(client);
         this.settings = new Settings(client);
         this.billing = new Billing(client);
+        this.credits = new Credits(client);
     }
 
     public Workspaces workspaces() {
@@ -46,6 +48,10 @@ public class EnterpriseResource {
 
     public Billing billing() {
         return billing;
+    }
+
+    public Credits credits() {
+        return credits;
     }
 
     public JsonObject getAccount() throws SendlyException {
@@ -480,6 +486,36 @@ public class EnterpriseResource {
                 params.put("limit", String.valueOf(limit));
             }
             return client.get("/enterprise/billing/workspace-breakdown", params.isEmpty() ? null : params);
+        }
+    }
+
+    public static class Credits {
+        private final Sendly client;
+
+        public Credits(Sendly client) {
+            this.client = client;
+        }
+
+        public JsonObject get() throws SendlyException {
+            return client.get("/enterprise/credits/pool", null);
+        }
+
+        public JsonObject deposit(int amount) throws SendlyException {
+            return deposit(amount, null);
+        }
+
+        public JsonObject deposit(int amount, String description) throws SendlyException {
+            if (amount <= 0) {
+                throw new ValidationException("Amount must be a positive integer");
+            }
+
+            JsonObject body = new JsonObject();
+            body.addProperty("amount", amount);
+            if (description != null && !description.isEmpty()) {
+                body.addProperty("description", description);
+            }
+
+            return client.post("/enterprise/credits/pool/deposit", body);
         }
     }
 }
