@@ -385,7 +385,7 @@ public class EnterpriseResource {
             JsonObject body = new JsonObject();
             body.addProperty("url", url);
 
-            return client.put("/enterprise/webhooks", body);
+            return client.post("/enterprise/webhooks", body);
         }
 
         public JsonObject get() throws SendlyException {
@@ -398,6 +398,10 @@ public class EnterpriseResource {
 
         public JsonObject test() throws SendlyException {
             return client.post("/enterprise/webhooks/test", new JsonObject());
+        }
+
+        public JsonObject rotateSecret() throws SendlyException {
+            return client.post("/enterprise/webhooks/rotate-secret", new JsonObject());
         }
     }
 
