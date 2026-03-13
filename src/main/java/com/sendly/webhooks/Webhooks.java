@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Map;
 
 /**
  * Webhook utilities for verifying and parsing Sendly webhook events.
@@ -258,6 +259,13 @@ public class Webhooks {
         private int creditsUsed;
         @SerializedName("message_format")
         private String messageFormat;
+        @SerializedName("created_at")
+        private String createdAt;
+        @SerializedName("retry_count")
+        private int retryCount;
+        @SerializedName("media_urls")
+        private String[] mediaUrls;
+        private transient Map<String, Object> metadata;
 
         public String getId() { return id; }
         /** @deprecated Use {@link #getId()} instead */
@@ -275,6 +283,40 @@ public class Webhooks {
         public int getSegments() { return segments; }
         public int getCreditsUsed() { return creditsUsed; }
         public String getMessageFormat() { return messageFormat; }
+        public String getCreatedAt() { return createdAt; }
+        public int getRetryCount() { return retryCount; }
+        public String[] getMediaUrls() { return mediaUrls; }
+        public Map<String, Object> getMetadata() { return metadata; }
+    }
+
+    public static class WebhookVerificationData {
+        private String id;
+        @SerializedName("organization_id") private String organizationId;
+        private String phone;
+        private String status;
+        @SerializedName("delivery_status") private String deliveryStatus;
+        private int attempts;
+        @SerializedName("max_attempts") private int maxAttempts;
+        @SerializedName("expires_at") private transient com.google.gson.JsonElement expiresAt;
+        @SerializedName("verified_at") private transient com.google.gson.JsonElement verifiedAt;
+        @SerializedName("created_at") private transient com.google.gson.JsonElement createdAt;
+        @SerializedName("app_name") private String appName;
+        @SerializedName("template_id") private String templateId;
+        @SerializedName("profile_id") private String profileId;
+
+        public String getId() { return id; }
+        public String getOrganizationId() { return organizationId; }
+        public String getPhone() { return phone; }
+        public String getStatus() { return status; }
+        public String getDeliveryStatus() { return deliveryStatus; }
+        public int getAttempts() { return attempts; }
+        public int getMaxAttempts() { return maxAttempts; }
+        public com.google.gson.JsonElement getExpiresAt() { return expiresAt; }
+        public com.google.gson.JsonElement getVerifiedAt() { return verifiedAt; }
+        public com.google.gson.JsonElement getCreatedAt() { return createdAt; }
+        public String getAppName() { return appName; }
+        public String getTemplateId() { return templateId; }
+        public String getProfileId() { return profileId; }
     }
 
     /**
