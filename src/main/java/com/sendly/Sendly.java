@@ -12,6 +12,7 @@ import com.sendly.resources.VerifyResource;
 import com.sendly.resources.TemplatesResource;
 import com.sendly.resources.CampaignsResource;
 import com.sendly.resources.ContactsResource;
+import com.sendly.resources.ConversationsResource;
 import com.sendly.resources.EnterpriseResource;
 import okhttp3.*;
 
@@ -50,6 +51,7 @@ public class Sendly {
     private final TemplatesResource templates;
     private final CampaignsResource campaigns;
     private final ContactsResource contacts;
+    private final ConversationsResource conversations;
     private final EnterpriseResource enterprise;
 
     /**
@@ -95,6 +97,7 @@ public class Sendly {
         this.templates = new TemplatesResource(this);
         this.campaigns = new CampaignsResource(this);
         this.contacts = new ContactsResource(this);
+        this.conversations = new ConversationsResource(this);
         this.enterprise = new EnterpriseResource(this);
     }
 
@@ -168,6 +171,15 @@ public class Sendly {
      */
     public ContactsResource contacts() {
         return contacts;
+    }
+
+    /**
+     * Get the Conversations resource.
+     *
+     * @return Conversations resource
+     */
+    public ConversationsResource conversations() {
+        return conversations;
     }
 
     /**
