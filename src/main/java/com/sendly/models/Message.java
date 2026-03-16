@@ -70,6 +70,9 @@ public class Message {
 
     private final Map<String, Object> metadata;
 
+    @SerializedName("ai_metadata")
+    private final JsonObject aiMetadata;
+
     /**
      * Create a Message from a JSON object.
      */
@@ -97,6 +100,7 @@ public class Message {
         this.retryCount = json.has("retry_count") || json.has("retryCount") ?
             (json.has("retry_count") ? json.get("retry_count").getAsInt() : json.get("retryCount").getAsInt()) : 0;
         this.metadata = parseMetadata(json);
+        this.aiMetadata = parseJsonObject(json, "ai_metadata", "aiMetadata");
     }
 
     @SuppressWarnings("unchecked")
@@ -121,6 +125,16 @@ public class Message {
                 }
             }
             return result;
+        }
+        return null;
+    }
+
+    private JsonObject parseJsonObject(JsonObject json, String key1, String key2) {
+        if (json.has(key1) && !json.get(key1).isJsonNull() && json.get(key1).isJsonObject()) {
+            return json.getAsJsonObject(key1);
+        }
+        if (json.has(key2) && !json.get(key2).isJsonNull() && json.get(key2).isJsonObject()) {
+            return json.getAsJsonObject(key2);
         }
         return null;
     }
@@ -228,6 +242,10 @@ public class Message {
 
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    public JsonObject getAiMetadata() {
+        return aiMetadata;
     }
 
     // Helper methods
