@@ -6,6 +6,7 @@ import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
 import com.sendly.models.Conversation;
 import com.sendly.models.ConversationListResponse;
+import com.sendly.models.LabelListResponse;
 import com.sendly.models.Message;
 
 import java.util.HashMap;
@@ -209,5 +210,45 @@ public class ConversationsResource {
 
         JsonObject response = client.post("/conversations/" + id + "/mark-read", new HashMap<>());
         return new Conversation(response);
+    }
+
+    /**
+     * Add labels to a conversation.
+     *
+     * @param conversationId Conversation ID
+     * @param labelIds       List of label IDs to add
+     * @return The updated label list
+     * @throws SendlyException if the request fails
+     */
+    public LabelListResponse addLabels(String conversationId, List<String> labelIds) throws SendlyException {
+        if (conversationId == null || conversationId.isEmpty()) {
+            throw new ValidationException("Conversation ID is required");
+        }
+        if (labelIds == null || labelIds.isEmpty()) {
+            throw new ValidationException("Label IDs are required");
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("labelIds", labelIds);
+
+        return client.request("POST", "/conversations/" + conversationId + "/labels", body, LabelListResponse.class);
+    }
+
+    /**
+     * Remove a label from a conversation.
+     *
+     * @param conversationId Conversation ID
+     * @param labelId        Label ID to remove
+     * @throws SendlyException if the request fails
+     */
+    public void removeLabel(String conversationId, String labelId) throws SendlyException {
+        if (conversationId == null || conversationId.isEmpty()) {
+            throw new ValidationException("Conversation ID is required");
+        }
+        if (labelId == null || labelId.isEmpty()) {
+            throw new ValidationException("Label ID is required");
+        }
+
+        client.request("DELETE", "/conversations/" + conversationId + "/labels/" + labelId, null, Void.class);
     }
 }

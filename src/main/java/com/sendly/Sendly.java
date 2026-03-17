@@ -13,6 +13,8 @@ import com.sendly.resources.TemplatesResource;
 import com.sendly.resources.CampaignsResource;
 import com.sendly.resources.ContactsResource;
 import com.sendly.resources.ConversationsResource;
+import com.sendly.resources.LabelsResource;
+import com.sendly.resources.DraftsResource;
 import com.sendly.resources.EnterpriseResource;
 import okhttp3.*;
 
@@ -52,6 +54,8 @@ public class Sendly {
     private final CampaignsResource campaigns;
     private final ContactsResource contacts;
     private final ConversationsResource conversations;
+    private final LabelsResource labels;
+    private final DraftsResource drafts;
     private final EnterpriseResource enterprise;
 
     /**
@@ -98,6 +102,8 @@ public class Sendly {
         this.campaigns = new CampaignsResource(this);
         this.contacts = new ContactsResource(this);
         this.conversations = new ConversationsResource(this);
+        this.labels = new LabelsResource(this);
+        this.drafts = new DraftsResource(this);
         this.enterprise = new EnterpriseResource(this);
     }
 
@@ -180,6 +186,24 @@ public class Sendly {
      */
     public ConversationsResource conversations() {
         return conversations;
+    }
+
+    /**
+     * Get the Labels resource.
+     *
+     * @return Labels resource
+     */
+    public LabelsResource labels() {
+        return labels;
+    }
+
+    /**
+     * Get the Drafts resource.
+     *
+     * @return Drafts resource
+     */
+    public DraftsResource drafts() {
+        return drafts;
     }
 
     /**
