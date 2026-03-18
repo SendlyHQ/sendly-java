@@ -68,6 +68,16 @@ public class EnterpriseResource {
         return client.post("/enterprise/workspaces/provision", options);
     }
 
+    public JsonObject generateBusinessPage(JsonObject options) throws SendlyException {
+        if (options == null) {
+            throw new ValidationException("Business page options are required");
+        }
+        if (!options.has("businessName") || options.get("businessName").getAsString().trim().isEmpty()) {
+            throw new ValidationException("businessName is required");
+        }
+        return client.post("/verification/business-page/generate", options);
+    }
+
     public static class Workspaces {
         private final Sendly client;
 
