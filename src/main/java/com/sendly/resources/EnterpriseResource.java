@@ -75,7 +75,7 @@ public class EnterpriseResource {
         if (!options.has("businessName") || options.get("businessName").getAsString().trim().isEmpty()) {
             throw new ValidationException("businessName is required");
         }
-        return client.post("/verification/business-page/generate", options);
+        return client.post("/enterprise/business-page/generate", options);
     }
 
     public static class Workspaces {
