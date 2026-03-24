@@ -5,7 +5,12 @@ import com.google.gson.JsonObject;
 import com.sendly.Sendly;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.RequestBody;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -76,6 +81,38 @@ public class EnterpriseResource {
             throw new ValidationException("businessName is required");
         }
         return client.post("/enterprise/business-page/generate", options);
+    }
+
+    public JsonObject uploadVerificationDocument(File file) throws SendlyException {
+        return uploadVerificationDocument(file, null, null);
+    }
+
+    public JsonObject uploadVerificationDocument(File file, String workspaceId, String verificationId) throws SendlyException {
+        if (file == null || !file.exists()) {
+            throw new ValidationException("A valid file is required");
+        }
+
+        String contentType = "application/octet-stream";
+        String name = file.getName().toLowerCase();
+        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
+        else if (name.endsWith(".png")) contentType = "image/png";
+        else if (name.endsWith(".gif")) contentType = "image/gif";
+        else if (name.endsWith(".pdf")) contentType = "application/pdf";
+        else if (name.endsWith(".webp")) contentType = "image/webp";
+
+        MultipartBody.Builder bodyBuilder = new MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart("file", file.getName(),
+                        RequestBody.create(file, MediaType.parse(contentType)));
+
+        if (workspaceId != null && !workspaceId.isEmpty()) {
+            bodyBuilder.addFormDataPart("workspaceId", workspaceId);
+        }
+        if (verificationId != null && !verificationId.isEmpty()) {
+            bodyBuilder.addFormDataPart("verificationId", verificationId);
+        }
+
+        return client.postMultipart("/enterprise/verification-document/upload", bodyBuilder.build());
     }
 
     public static class Workspaces {
