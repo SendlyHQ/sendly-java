@@ -99,4 +99,36 @@ public class TemplatesResource {
         }
         return client.request("POST", "/templates/" + templateId + "/clone", body, Template.class);
     }
+
+    /**
+     * Generate a template using AI.
+     *
+     * @param description Description of the template to generate
+     * @return The generated template
+     * @throws SendlyException if the request fails
+     */
+    public GeneratedTemplate generate(String description) throws SendlyException {
+        return generate(description, null);
+    }
+
+    /**
+     * Generate a template using AI.
+     *
+     * @param description Description of the template to generate
+     * @param category    Optional category for the template
+     * @return The generated template
+     * @throws SendlyException if the request fails
+     */
+    public GeneratedTemplate generate(String description, String category) throws SendlyException {
+        if (description == null || description.isEmpty()) {
+            throw new ValidationException("Description is required");
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("description", description);
+        if (category != null) {
+            body.put("category", category);
+        }
+        return client.request("POST", "/templates/generate", body, GeneratedTemplate.class);
+    }
 }

@@ -251,4 +251,36 @@ public class ConversationsResource {
 
         client.request("DELETE", "/conversations/" + conversationId + "/labels/" + labelId, null, Void.class);
     }
+
+    /**
+     * Get conversation context for AI/LLM consumption.
+     *
+     * @param id Conversation ID
+     * @return The conversation context
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject getContext(String id) throws SendlyException {
+        return getContext(id, 0);
+    }
+
+    /**
+     * Get conversation context for AI/LLM consumption.
+     *
+     * @param id          Conversation ID
+     * @param maxMessages Maximum number of messages to include (0 for default)
+     * @return The conversation context
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject getContext(String id, int maxMessages) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Conversation ID is required");
+        }
+
+        Map<String, String> params = new HashMap<>();
+        if (maxMessages > 0) {
+            params.put("max_messages", String.valueOf(maxMessages));
+        }
+
+        return client.get("/conversations/" + id + "/context", params.isEmpty() ? null : params);
+    }
 }

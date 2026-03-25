@@ -15,6 +15,7 @@ import com.sendly.resources.ContactsResource;
 import com.sendly.resources.ConversationsResource;
 import com.sendly.resources.LabelsResource;
 import com.sendly.resources.DraftsResource;
+import com.sendly.resources.RulesResource;
 import com.sendly.resources.EnterpriseResource;
 import okhttp3.*;
 
@@ -56,6 +57,7 @@ public class Sendly {
     private final ConversationsResource conversations;
     private final LabelsResource labels;
     private final DraftsResource drafts;
+    private final RulesResource rules;
     private final EnterpriseResource enterprise;
 
     /**
@@ -104,6 +106,7 @@ public class Sendly {
         this.conversations = new ConversationsResource(this);
         this.labels = new LabelsResource(this);
         this.drafts = new DraftsResource(this);
+        this.rules = new RulesResource(this);
         this.enterprise = new EnterpriseResource(this);
     }
 
@@ -204,6 +207,15 @@ public class Sendly {
      */
     public DraftsResource drafts() {
         return drafts;
+    }
+
+    /**
+     * Get the Rules resource.
+     *
+     * @return Rules resource
+     */
+    public RulesResource rules() {
+        return rules;
     }
 
     /**
