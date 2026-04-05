@@ -10,6 +10,8 @@ public class BatchMessageResult {
     private final String to;
     private final String status;
     private final String error;
+    private final String createdAt;
+    private final String deliveredAt;
 
     /**
      * Create a BatchMessageResult from a JSON object.
@@ -19,6 +21,8 @@ public class BatchMessageResult {
         this.to = getStringOrNull(json, "to");
         this.status = getStringOrNull(json, "status");
         this.error = getStringOrNull(json, "error");
+        this.createdAt = getStringOrNull(json, "createdAt");
+        this.deliveredAt = getStringOrNull(json, "deliveredAt");
     }
 
     private String getStringOrNull(JsonObject json, String key) {
@@ -41,18 +45,26 @@ public class BatchMessageResult {
         return error;
     }
 
+    public String getCreatedAt() {
+        return createdAt;
+    }
+
+    public String getDeliveredAt() {
+        return deliveredAt;
+    }
+
     /**
      * Check if this message was queued successfully.
      */
     public boolean isSuccess() {
-        return "queued".equals(status);
+        return "queued".equals(status) || "sent".equals(status) || "delivered".equals(status);
     }
 
     /**
      * Check if this message failed.
      */
     public boolean isFailed() {
-        return "failed".equals(status);
+        return "failed".equals(status) || "bounced".equals(status);
     }
 
     @Override

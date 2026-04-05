@@ -154,6 +154,7 @@ public class Webhooks {
             data.segments = getIntOr(msgObj, "segments", 1);
             data.creditsUsed = getIntOr(msgObj, "credits_used", 0);
             data.messageFormat = getStringOr(msgObj, "message_format", null);
+            data.batchId = getStringOr(msgObj, "batch_id", null);
 
             WebhookEvent event = new WebhookEvent();
             event.id = raw.get("id").getAsString();
@@ -266,6 +267,8 @@ public class Webhooks {
         @SerializedName("media_urls")
         private String[] mediaUrls;
         private transient Map<String, Object> metadata;
+        @SerializedName("batch_id")
+        private String batchId;
 
         public String getId() { return id; }
         /** @deprecated Use {@link #getId()} instead */
@@ -287,6 +290,7 @@ public class Webhooks {
         public int getRetryCount() { return retryCount; }
         public String[] getMediaUrls() { return mediaUrls; }
         public Map<String, Object> getMetadata() { return metadata; }
+        public String getBatchId() { return batchId; }
     }
 
     public static class WebhookVerificationData {
