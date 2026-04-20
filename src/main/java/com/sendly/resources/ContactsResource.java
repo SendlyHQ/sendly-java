@@ -73,6 +73,41 @@ public class ContactsResource {
         client.delete("/contacts/" + id);
     }
 
+    /**
+     * Clear the invalid flag on a contact so future campaigns include it again.
+     * Contacts get auto-flagged when a send fails with a terminal bad-number
+     * error (landline, invalid number) or when a carrier lookup reports they
+     * can't receive SMS.
+     */
+    public Contact markValid(String id) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Contact ID is required");
+        }
+        JsonObject response = client.post("/contacts/" + id + "/mark-valid", new JsonObject());
+        return new Contact(response);
+    }
+
+    /**
+     * Trigger a background carrier lookup across your contacts. Landlines
+     * and other non-SMS-capable numbers are auto-excluded from future
+     * campaigns. Idempotent: re-triggering while a lookup is running for
+     * the same scope is a no-op.
+     *
+     * @param listId scope to a single list (or null for all un-checked contacts)
+     * @param force re-check contacts even if previously looked up
+     */
+    public JsonObject checkNumbers(String listId, boolean force) throws SendlyException {
+        JsonObject body = new JsonObject();
+        if (listId != null) body.addProperty("listId", listId);
+        body.addProperty("force", force);
+        return client.post("/contacts/lookup", body);
+    }
+
+    /** Check all un-checked contacts. */
+    public JsonObject checkNumbers() throws SendlyException {
+        return checkNumbers(null, false);
+    }
+
     public ImportContactsResponse importContacts(ImportContactsRequest request) throws SendlyException {
         if (request.getContacts() == null || request.getContacts().isEmpty()) {
             throw new ValidationException("Contacts list is required");
