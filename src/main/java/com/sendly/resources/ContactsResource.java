@@ -4,6 +4,8 @@ import com.google.gson.JsonObject;
 import com.sendly.Sendly;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
+import com.sendly.models.BulkMarkValidRequest;
+import com.sendly.models.BulkMarkValidResponse;
 import com.sendly.models.Contact;
 import com.sendly.models.ContactList;
 import com.sendly.models.ContactListResponse;
@@ -85,6 +87,40 @@ public class ContactsResource {
         }
         JsonObject response = client.post("/contacts/" + id + "/mark-valid", new JsonObject());
         return new Contact(response);
+    }
+
+    /**
+     * Clear the invalid flag on many contacts at once — the escape hatch for
+     * when auto-flag misclassifies at scale. Pass either {@code ids} (up to
+     * 10,000 per call) OR {@code listId} on the request, not both. Foreign
+     * ids silently no-op via the per-organization filter.
+     *
+     * @return number of contacts whose flag was actually cleared
+     */
+    public BulkMarkValidResponse bulkMarkValid(BulkMarkValidRequest request) throws SendlyException {
+        boolean hasIds = request != null && request.getIds() != null && !request.getIds().isEmpty();
+        boolean hasListId = request != null && request.getListId() != null && !request.getListId().isEmpty();
+
+        if (!hasIds && !hasListId) {
+            throw new ValidationException("bulkMarkValid requires either ids or listId");
+        }
+        if (hasIds && hasListId) {
+            throw new ValidationException("bulkMarkValid accepts ids OR listId, not both");
+        }
+
+        JsonObject body = new JsonObject();
+        if (hasIds) {
+            com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+            for (String id : request.getIds()) {
+                arr.add(id);
+            }
+            body.add("ids", arr);
+        } else {
+            body.addProperty("listId", request.getListId());
+        }
+
+        JsonObject response = client.post("/contacts/bulk-mark-valid", body);
+        return new BulkMarkValidResponse(response);
     }
 
     /**

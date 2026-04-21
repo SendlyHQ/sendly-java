@@ -24,6 +24,8 @@ public class Contact {
     private String invalidReason;
     @SerializedName("invalidated_at")
     private String invalidatedAt;
+    @SerializedName("user_marked_valid_at")
+    private String userMarkedValidAt;
     @SerializedName("created_at")
     private String createdAt;
     @SerializedName("updated_at")
@@ -62,6 +64,7 @@ public class Contact {
         this.lineTypeCheckedAt = readStr(json, "line_type_checked_at", "lineTypeCheckedAt");
         this.invalidReason = readStr(json, "invalid_reason", "invalidReason");
         this.invalidatedAt = readStr(json, "invalidated_at", "invalidatedAt");
+        this.userMarkedValidAt = readStr(json, "user_marked_valid_at", "userMarkedValidAt");
         this.createdAt = readStr(json, "created_at", "createdAt");
         this.updatedAt = readStr(json, "updated_at", "updatedAt");
     }
@@ -89,6 +92,7 @@ public class Contact {
     public String getLineTypeCheckedAt() { return lineTypeCheckedAt; }
     public String getInvalidReason() { return invalidReason; }
     public String getInvalidatedAt() { return invalidatedAt; }
+    public String getUserMarkedValidAt() { return userMarkedValidAt; }
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
 }
