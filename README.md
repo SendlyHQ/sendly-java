@@ -24,20 +24,20 @@ Official Java SDK for the Sendly SMS API.
 <dependency>
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>3.7.0</version>
+    <version>3.29.0</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'live.sendly:sendly-java:3.7.0'
+implementation 'live.sendly:sendly-java:3.29.0'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("live.sendly:sendly-java:3.7.0")
+implementation("live.sendly:sendly-java:3.29.0")
 ```
 
 ## Quick Start
@@ -386,7 +386,7 @@ message.isPending();       // boolean
 
 | Tier | Countries | Credits per SMS |
 |------|-----------|-----------------|
-| Domestic | US, CA | 1 |
+| Domestic | US, CA | 2 |
 | Tier 1 | GB, PL, IN, etc. | 8 |
 | Tier 2 | FR, JP, AU, etc. | 12 |
 | Tier 3 | DE, IT, MX, etc. | 16 |
