@@ -135,6 +135,114 @@ public class WebhooksResource {
     }
 
     /**
+     * Replay failed or cancelled webhook deliveries from the audit log.
+     *
+     * <p>Use after a customer endpoint has recovered from an outage to
+     * re-fire deliveries we recorded but couldn't deliver. Each replay
+     * creates a new delivery row preserving the original event_id so
+     * customers can dedupe. Rejects with HTTP 409 if the circuit is
+     * currently open — call {@link #resetCircuit(String)} first.
+     *
+     * @param webhookId Webhook ID
+     * @param options   Optional window and filter options; pass {@code null}
+     *                  for server defaults
+     * @return Counts of requeued deliveries plus delivery IDs
+     */
+    public JsonObject redeliver(String webhookId, RedeliverOptions options) throws SendlyException {
+        validateWebhookId(webhookId);
+        JsonObject body = options != null ? options.toJson() : new JsonObject();
+        return client.post("/webhooks/" + webhookId + "/redeliver", body);
+    }
+
+    public JsonObject redeliver(String webhookId) throws SendlyException {
+        return redeliver(webhookId, null);
+    }
+
+    /**
+     * Backfill missed webhook events from the underlying message log.
+     *
+     * <p>Use when a circuit-breaker outage left events with no audit row
+     * (the case {@link #redeliver(String, RedeliverOptions)} cannot
+     * recover). Synthesized events have fresh IDs; clients should dedupe
+     * by event.data.object.id (the message ID). Rejects with HTTP 409 if
+     * the circuit is currently open — call
+     * {@link #resetCircuit(String)} first.
+     *
+     * @param webhookId Webhook ID
+     * @param options   Optional window and filter options; pass {@code null}
+     *                  for server defaults
+     * @return Counts grouped by event type plus delivery IDs
+     */
+    public JsonObject backfill(String webhookId, BackfillOptions options) throws SendlyException {
+        validateWebhookId(webhookId);
+        JsonObject body = options != null ? options.toJson() : new JsonObject();
+        return client.post("/webhooks/" + webhookId + "/backfill", body);
+    }
+
+    public JsonObject backfill(String webhookId) throws SendlyException {
+        return backfill(webhookId, null);
+    }
+
+    /** Options for {@link #redeliver(String, RedeliverOptions)}. */
+    public static final class RedeliverOptions {
+        private String since;
+        private String until;
+        private java.util.List<String> eventTypes;
+        private java.util.List<String> statuses;
+        private Integer limit;
+
+        public RedeliverOptions since(String since) { this.since = since; return this; }
+        public RedeliverOptions until(String until) { this.until = until; return this; }
+        public RedeliverOptions eventTypes(java.util.List<String> eventTypes) { this.eventTypes = eventTypes; return this; }
+        public RedeliverOptions statuses(java.util.List<String> statuses) { this.statuses = statuses; return this; }
+        public RedeliverOptions limit(int limit) { this.limit = limit; return this; }
+
+        JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            if (since != null) json.addProperty("since", since);
+            if (until != null) json.addProperty("until", until);
+            if (eventTypes != null) {
+                com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+                for (String t : eventTypes) arr.add(t);
+                json.add("event_types", arr);
+            }
+            if (statuses != null) {
+                com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+                for (String s : statuses) arr.add(s);
+                json.add("statuses", arr);
+            }
+            if (limit != null) json.addProperty("limit", limit);
+            return json;
+        }
+    }
+
+    /** Options for {@link #backfill(String, BackfillOptions)}. */
+    public static final class BackfillOptions {
+        private String since;
+        private String until;
+        private java.util.List<String> eventTypes;
+        private Integer limit;
+
+        public BackfillOptions since(String since) { this.since = since; return this; }
+        public BackfillOptions until(String until) { this.until = until; return this; }
+        public BackfillOptions eventTypes(java.util.List<String> eventTypes) { this.eventTypes = eventTypes; return this; }
+        public BackfillOptions limit(int limit) { this.limit = limit; return this; }
+
+        JsonObject toJson() {
+            JsonObject json = new JsonObject();
+            if (since != null) json.addProperty("since", since);
+            if (until != null) json.addProperty("until", until);
+            if (eventTypes != null) {
+                com.google.gson.JsonArray arr = new com.google.gson.JsonArray();
+                for (String t : eventTypes) arr.add(t);
+                json.add("event_types", arr);
+            }
+            if (limit != null) json.addProperty("limit", limit);
+            return json;
+        }
+    }
+
+    /**
      * Rotate the webhook signing secret.
      */
     public WebhookCreatedResponse rotateSecret(String webhookId) throws SendlyException {
