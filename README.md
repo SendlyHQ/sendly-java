@@ -278,40 +278,6 @@ for (String eventType : eventTypes) {
 }
 ```
 
-### Recovering Missed Events
-
-After an outage (your endpoint was down, or our circuit breaker opened),
-two methods recover what was missed:
-
-```java
-import com.sendly.resources.WebhooksResource.RedeliverOptions;
-import com.sendly.resources.WebhooksResource.BackfillOptions;
-
-// Redeliver: re-send failed deliveries already in the audit log.
-JsonObject redeliver = client.webhooks().redeliver("whk_xxx",
-    new RedeliverOptions()
-        .since("2026-05-01T00:00:00Z")
-        .until("2026-05-01T18:00:00Z")
-        .eventTypes(List.of("message.delivered", "message.failed"))
-        .limit(5000)
-);
-System.out.println("Queued " + redeliver.get("queued").getAsInt() + " retries");
-
-// Backfill: synthesize deliveries for messages whose events never created
-// a delivery row in the first place (silent-drop case).
-JsonObject backfill = client.webhooks().backfill("whk_xxx",
-    new BackfillOptions()
-        .since("2026-05-01T00:00:00Z")
-        .eventTypes(List.of("message.delivered", "message.failed"))
-);
-System.out.println("Backfilled " + backfill.get("queued").getAsInt() + " events");
-```
-
-Use `redeliver` when deliveries exist but failed (5xx, timeout). Use
-`backfill` when deliveries are missing entirely (circuit was open during
-the outage). Both are idempotent — duplicate calls within the same window
-won't double-send.
-
 ## Account & Credits
 
 ```java
