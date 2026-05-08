@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.sendly.Sendly;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
+import com.sendly.models.VerificationSubmitInput;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
@@ -154,9 +155,47 @@ public class EnterpriseResource {
             client.delete("/enterprise/workspaces/" + workspaceId);
         }
 
+        /**
+         * Submit (or resubmit) a verification for an enterprise workspace.
+         *
+         * <p>Partial-update friendly (May 2026): for resubmit on an existing
+         * workspace, you only need to set the fields you want to change —
+         * everything else is preserved from the existing record. Hosted
+         * page URLs ({@code /biz/}, {@code /opt-in/}, {@code /legal/})
+         * generated during provision are auto-preserved.</p>
+         *
+         * <p>For sole proprietors leave {@code brn}, {@code brnType},
+         * {@code brnCountry} unset — the server strips them before
+         * forwarding to the carrier.</p>
+         *
+         * <p>Null fields are dropped from the JSON body, so omitting a
+         * field on the input means "do not change".</p>
+         */
+        public JsonObject submitVerification(String workspaceId, VerificationSubmitInput data) throws SendlyException {
+            validateWorkspaceId(workspaceId);
+            if (data == null || data.isEmpty()) {
+                throw new ValidationException("Verification data is required");
+            }
+            return client.post("/enterprise/workspaces/" + workspaceId + "/verification/submit", data);
+        }
+
+        /**
+         * Convenience alias for resubmits. Reads more naturally when you
+         * only want to update a few fields after a rejection. Identical
+         * semantics to {@link #submitVerification(String, VerificationSubmitInput)}.
+         */
+        public JsonObject resubmitVerification(String workspaceId, VerificationSubmitInput partial) throws SendlyException {
+            return submitVerification(workspaceId, partial);
+        }
+
+        /**
+         * Raw {@link JsonObject} overload kept for callers that build the
+         * payload by hand. Prefer the typed
+         * {@link #submitVerification(String, VerificationSubmitInput)} form.
+         */
         public JsonObject submitVerification(String workspaceId, JsonObject data) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            if (data == null) {
+            if (data == null || data.size() == 0) {
                 throw new ValidationException("Verification data is required");
             }
             return client.post("/enterprise/workspaces/" + workspaceId + "/verification/submit", data);

@@ -1,5 +1,21 @@
 # sendly-java
 
+## 3.30.0
+
+### Minor Changes
+
+- `enterprise.workspaces().submitVerification(workspaceId, VerificationSubmitInput)`: rewritten to match the actual API shape (camelCase top-level, nested `address`/`contact` objects, `entityType` + `brn`/`brnType`/`brnCountry` instead of the previous flat `businessType`/`ein` shape). The previous shape didn't match the server endpoint and produced 400s.
+- **Partial-update friendly:** for resubmits on existing workspaces, set only the fields you want to change — everything else is filled from the existing record. Null fields on `VerificationSubmitInput` are stripped before serialization. Hosted page URLs (`/biz/`, `/opt-in/`, `/legal/`) generated during provision are auto-preserved.
+- `enterprise.workspaces().resubmitVerification(workspaceId, partial)`: convenience alias for resubmits — same as `submitVerification` but reads more naturally for one-field-change use cases.
+- New `VerificationSubmitInput` model (with nested `Address` and `Contact` builders) — type-safe payload shape with all fields documented.
+- The legacy `submitVerification(String, JsonObject)` overload is preserved for callers that build the payload by hand.
+
+### Server-side fixes paired with this release
+
+- `/api/v1/enterprise/workspaces/:id/verification/submit` now returns specific missing-field errors (e.g. `"Missing required fields: website"`) instead of listing every required field whether present or not.
+- Endpoint accepts both flat and `{ verification: {...} }` wrapped shapes (matches `/enterprise/provision`).
+- `useCase` validation expanded from 23 entries to the full 43-value Telnyx enum.
+
 ## 3.29.0
 
 ### Minor Changes
