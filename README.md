@@ -24,20 +24,20 @@ Official Java SDK for the Sendly SMS API.
 <dependency>
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>3.29.0</version>
+    <version>3.31.0</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'live.sendly:sendly-java:3.29.0'
+implementation 'live.sendly:sendly-java:3.31.0'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("live.sendly:sendly-java:3.29.0")
+implementation("live.sendly:sendly-java:3.31.0")
 ```
 
 ## Quick Start
@@ -212,8 +212,8 @@ BatchPreviewResponse preview = client.messages().previewBatch(
         .addMessage("+447700900123", "Hello UK!")
         .build()
 );
-System.out.println("Total credits needed: " + preview.getTotalCredits());
-System.out.println("Valid: " + preview.getValid() + ", Invalid: " + preview.getInvalid());
+System.out.println("Credits needed: " + preview.getCreditsNeeded());
+System.out.println("Will send: " + preview.getWillSend() + ", Blocked: " + preview.getBlocked());
 ```
 
 ### Iterate All Messages
@@ -238,11 +238,9 @@ for (Message message : client.messages().each(
 
 ```java
 // Create a webhook endpoint
-Webhook webhook = client.webhooks().create(
-    CreateWebhookRequest.builder()
-        .url("https://example.com/webhooks/sendly")
-        .events(Arrays.asList("message.delivered", "message.failed"))
-        .build()
+WebhookCreatedResponse webhook = client.webhooks().create(
+    "https://example.com/webhooks/sendly",
+    Arrays.asList("message.delivered", "message.failed")
 );
 
 System.out.println(webhook.getId());
@@ -254,19 +252,19 @@ List<Webhook> webhooks = client.webhooks().list();
 // Get a specific webhook
 Webhook wh = client.webhooks().get("whk_xxx");
 
-// Update a webhook
+// Update a webhook (url, events, description, isActive)
 client.webhooks().update("whk_xxx",
-    UpdateWebhookRequest.builder()
-        .url("https://new-endpoint.example.com/webhook")
-        .events(Arrays.asList("message.delivered", "message.failed", "message.sent"))
-        .build()
+    "https://new-endpoint.example.com/webhook",
+    Arrays.asList("message.delivered", "message.failed", "message.sent"),
+    null,
+    null
 );
 
 // Test a webhook
 WebhookTestResult result = client.webhooks().test("whk_xxx");
 
 // Rotate webhook secret
-WebhookSecretRotation rotation = client.webhooks().rotateSecret("whk_xxx");
+WebhookCreatedResponse rotation = client.webhooks().rotateSecret("whk_xxx");
 
 // Delete a webhook
 client.webhooks().delete("whk_xxx");
@@ -292,13 +290,13 @@ System.out.println("Reserved: " + credits.getReservedBalance() + " credits");
 System.out.println("Total: " + credits.getBalance() + " credits");
 
 // View credit transaction history
-CreditTransactionList transactions = client.account().getCreditTransactions();
+List<CreditTransaction> transactions = client.account().getCreditTransactions();
 for (CreditTransaction tx : transactions) {
     System.out.println(tx.getType() + ": " + tx.getAmount() + " credits - " + tx.getDescription());
 }
 
 // List API keys
-ApiKeyList keys = client.account().listApiKeys();
+List<ApiKey> keys = client.account().listApiKeys();
 for (ApiKey key : keys) {
     System.out.println(key.getName() + ": " + key.getPrefix() + "*** (" + key.getType() + ")");
 }
@@ -306,19 +304,13 @@ for (ApiKey key : keys) {
 // Get a specific API key
 ApiKey key = client.account().getApiKey("key_xxx");
 
-// Get API key usage stats
-ApiKeyUsage usage = client.account().getApiKeyUsage("key_xxx");
-System.out.println("Messages sent: " + usage.getMessagesSent());
+// Get API key usage stats (raw JSON)
+JsonObject usage = client.account().getApiKeyUsage("key_xxx");
+System.out.println("Messages sent: " + usage.get("messagesSent").getAsInt());
 
-// Create a new API key
-ApiKey newKey = client.account().createApiKey(
-    CreateApiKeyRequest.builder()
-        .name("Production Key")
-        .type("live")
-        .scopes(Arrays.asList("sms:send", "sms:read"))
-        .build()
-);
-System.out.println("New key: " + newKey.getKey()); // Only shown once!
+// Create a new API key (returns raw JSON; key value shown only once)
+JsonObject newKey = client.account().createApiKey("Production Key", "live", Arrays.asList("sms:send", "sms:read"));
+System.out.println("New key: " + newKey.get("key").getAsString());
 
 // Revoke an API key
 client.account().revokeApiKey("key_xxx");

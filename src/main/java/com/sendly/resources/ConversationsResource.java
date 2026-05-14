@@ -283,4 +283,23 @@ public class ConversationsResource {
 
         return client.get("/conversations/" + id + "/context", params.isEmpty() ? null : params);
     }
+
+    /**
+     * Generate AI-suggested replies for a conversation based on its
+     * recent message history. Mirrors {@code conversations.suggestReplies()}
+     * in our Node, Python, Ruby, Go, and C# SDKs.
+     *
+     * @param id Conversation ID
+     * @return JSON response with {@code suggestions} array (each entry has
+     *         {@code text} and {@code tone}), plus optional
+     *         {@code basedOnMessageId} and {@code model}.
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject suggestReplies(String id) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Conversation ID is required");
+        }
+
+        return client.post("/conversations/" + id + "/suggest-replies", new HashMap<>());
+    }
 }

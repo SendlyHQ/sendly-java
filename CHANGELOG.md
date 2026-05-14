@@ -1,5 +1,16 @@
 # sendly-java
 
+## 3.31.0
+
+### Minor Changes
+
+- New method **`conversations().suggestReplies(id)`** — returns AI-generated reply suggestions for a conversation. Mirrors the same method on our Node, Python, Ruby, Go, and C# SDKs (closes a feature gap).
+
+  ```java
+  JsonObject response = client.conversations().suggestReplies("conv_abc");
+  // response.suggestions[] each has .text and .tone
+  ```
+
 ## 3.30.0
 
 ### Minor Changes
