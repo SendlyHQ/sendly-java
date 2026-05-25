@@ -17,6 +17,7 @@ import com.sendly.resources.LabelsResource;
 import com.sendly.resources.DraftsResource;
 import com.sendly.resources.RulesResource;
 import com.sendly.resources.EnterpriseResource;
+import com.sendly.resources.BusinessUpgradeResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -59,6 +60,7 @@ public class Sendly {
     private final DraftsResource drafts;
     private final RulesResource rules;
     private final EnterpriseResource enterprise;
+    private final BusinessUpgradeResource businessUpgrade;
 
     /**
      * Create a new Sendly client with default settings.
@@ -108,6 +110,7 @@ public class Sendly {
         this.drafts = new DraftsResource(this);
         this.rules = new RulesResource(this);
         this.enterprise = new EnterpriseResource(this);
+        this.businessUpgrade = new BusinessUpgradeResource(this);
     }
 
     /**
@@ -225,6 +228,15 @@ public class Sendly {
      */
     public EnterpriseResource enterprise() {
         return enterprise;
+    }
+
+    /**
+     * Get the Business Upgrade resource (entity-upgrade / fork-with-new-number).
+     *
+     * @return BusinessUpgrade resource
+     */
+    public BusinessUpgradeResource businessUpgrade() {
+        return businessUpgrade;
     }
 
     /**

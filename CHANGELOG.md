@@ -1,5 +1,37 @@
 # sendly-java
 
+## 3.32.0
+
+### Minor Changes
+
+- New resource **`businessUpgrade()`** — entity-upgrade (a.k.a. fork-with-new-number) flow for toll-free numbers. When a customer forms a new legal entity (e.g. an LLC), this resource reserves a new toll-free number under the new entity, submits it for carrier review, and atomically swaps to it on approval — without disrupting outbound SMS during the 1-2 week review window. Mirrors the same resource on our Node SDK.
+
+  7 methods: `preflight`, `bestPrefill`, `start`, `status`, `cancel`, `resubmit`, `setDisposition`. `start` and `resubmit` accept an optional `EinDocument` (built via `EinDocument.fromFile(File)` or `EinDocument.fromBytes(byte[], filename)`) uploaded as multipart form data.
+
+  ```java
+  // Preview validation
+  JsonObject preview = client.businessUpgrade().preflight(
+      BusinessUpgradeResource.PreflightCandidate.builder()
+          .businessName("Acme Holdings LLC")
+          .brn("12-3456789")
+          .brnType("EIN")
+          .brnCountry("US")
+          .entityType("PRIVATE_PROFIT")
+          .build());
+
+  // Submit with IRS letter
+  JsonObject result = client.businessUpgrade().start(
+      "ws_abc",
+      BusinessUpgradeResource.StartUpgradeParams.builder()
+          .businessName("Acme Holdings LLC")
+          .brn("12-3456789")
+          .brnType("EIN")
+          .brnCountry("US")
+          .entityType("PRIVATE_PROFIT")
+          .build(),
+      BusinessUpgradeResource.EinDocument.fromFile(new File("./CP-575.pdf")));
+  ```
+
 ## 3.31.0
 
 ### Minor Changes
