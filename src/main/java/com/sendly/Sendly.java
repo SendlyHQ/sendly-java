@@ -18,6 +18,7 @@ import com.sendly.resources.DraftsResource;
 import com.sendly.resources.RulesResource;
 import com.sendly.resources.EnterpriseResource;
 import com.sendly.resources.BusinessUpgradeResource;
+import com.sendly.resources.NumbersResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -61,6 +62,7 @@ public class Sendly {
     private final RulesResource rules;
     private final EnterpriseResource enterprise;
     private final BusinessUpgradeResource businessUpgrade;
+    private final NumbersResource numbers;
 
     /**
      * Create a new Sendly client with default settings.
@@ -111,6 +113,7 @@ public class Sendly {
         this.rules = new RulesResource(this);
         this.enterprise = new EnterpriseResource(this);
         this.businessUpgrade = new BusinessUpgradeResource(this);
+        this.numbers = new NumbersResource(this);
     }
 
     /**
@@ -237,6 +240,15 @@ public class Sendly {
      */
     public BusinessUpgradeResource businessUpgrade() {
         return businessUpgrade;
+    }
+
+    /**
+     * Get the Numbers resource (phone number discovery &amp; provisioning).
+     *
+     * @return Numbers resource
+     */
+    public NumbersResource numbers() {
+        return numbers;
     }
 
     /**
