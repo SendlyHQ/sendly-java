@@ -13,6 +13,9 @@ public class OwnedNumber {
     private String countryCode;
     private String phoneNumberType;
     private Integer monthlyCostCents;
+    private String requirementsSubmittedAt;
+    private boolean pendingCancellation;
+    private String scheduledReleaseAt;
 
     public OwnedNumber() {}
 
@@ -38,6 +41,15 @@ public class OwnedNumber {
         if (json.has("monthlyCostCents") && !json.get("monthlyCostCents").isJsonNull()) {
             this.monthlyCostCents = json.get("monthlyCostCents").getAsInt();
         }
+        if (json.has("requirementsSubmittedAt") && !json.get("requirementsSubmittedAt").isJsonNull()) {
+            this.requirementsSubmittedAt = json.get("requirementsSubmittedAt").getAsString();
+        }
+        if (json.has("pendingCancellation") && !json.get("pendingCancellation").isJsonNull()) {
+            this.pendingCancellation = json.get("pendingCancellation").getAsBoolean();
+        }
+        if (json.has("scheduledReleaseAt") && !json.get("scheduledReleaseAt").isJsonNull()) {
+            this.scheduledReleaseAt = json.get("scheduledReleaseAt").getAsString();
+        }
     }
 
     /** Unique number identifier. */
@@ -60,4 +72,13 @@ public class OwnedNumber {
 
     /** Monthly cost in cents. */
     public Integer getMonthlyCostCents() { return monthlyCostCents; }
+
+    /** When regulatory documents were submitted (ISO-8601), or null if still required. */
+    public String getRequirementsSubmittedAt() { return requirementsSubmittedAt; }
+
+    /** True if the number is scheduled for release at period end. */
+    public boolean isPendingCancellation() { return pendingCancellation; }
+
+    /** When the number is scheduled to be released (ISO-8601), or null if not scheduled. */
+    public String getScheduledReleaseAt() { return scheduledReleaseAt; }
 }
