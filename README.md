@@ -112,6 +112,16 @@ Message message = client.messages().send(
         .build()
 );
 
+// Send from one of your owned numbers (or an alphanumeric sender ID).
+// Omit from(...) to use your default sender.
+Message message = client.messages().send(
+    SendMessageRequest.builder()
+        .to("+15551234567")
+        .text("Hello from our team!")
+        .from("+447111111111")
+        .build()
+);
+
 System.out.println(message.getId());
 System.out.println(message.getStatus());
 System.out.println(message.getCreditsUsed());
