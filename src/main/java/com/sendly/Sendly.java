@@ -19,6 +19,7 @@ import com.sendly.resources.RulesResource;
 import com.sendly.resources.EnterpriseResource;
 import com.sendly.resources.BusinessUpgradeResource;
 import com.sendly.resources.NumbersResource;
+import com.sendly.resources.TenDlcResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -63,6 +64,7 @@ public class Sendly {
     private final EnterpriseResource enterprise;
     private final BusinessUpgradeResource businessUpgrade;
     private final NumbersResource numbers;
+    private final TenDlcResource tenDlc;
 
     /**
      * Create a new Sendly client with default settings.
@@ -114,6 +116,7 @@ public class Sendly {
         this.enterprise = new EnterpriseResource(this);
         this.businessUpgrade = new BusinessUpgradeResource(this);
         this.numbers = new NumbersResource(this);
+        this.tenDlc = new TenDlcResource(this);
     }
 
     /**
@@ -249,6 +252,15 @@ public class Sendly {
      */
     public NumbersResource numbers() {
         return numbers;
+    }
+
+    /**
+     * Get the 10DLC resource (local-number texting registration).
+     *
+     * @return TenDlc resource
+     */
+    public TenDlcResource tenDlc() {
+        return tenDlc;
     }
 
     /**
