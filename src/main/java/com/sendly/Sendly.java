@@ -20,6 +20,7 @@ import com.sendly.resources.EnterpriseResource;
 import com.sendly.resources.BusinessUpgradeResource;
 import com.sendly.resources.NumbersResource;
 import com.sendly.resources.TenDlcResource;
+import com.sendly.resources.LinksResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -65,6 +66,7 @@ public class Sendly {
     private final BusinessUpgradeResource businessUpgrade;
     private final NumbersResource numbers;
     private final TenDlcResource tenDlc;
+    private final LinksResource links;
 
     /**
      * Create a new Sendly client with default settings.
@@ -117,6 +119,7 @@ public class Sendly {
         this.businessUpgrade = new BusinessUpgradeResource(this);
         this.numbers = new NumbersResource(this);
         this.tenDlc = new TenDlcResource(this);
+        this.links = new LinksResource(this);
     }
 
     /**
@@ -261,6 +264,15 @@ public class Sendly {
      */
     public TenDlcResource tenDlc() {
         return tenDlc;
+    }
+
+    /**
+     * Get the Links resource (branded URL shortening).
+     *
+     * @return Links resource
+     */
+    public LinksResource links() {
+        return links;
     }
 
     /**
@@ -443,6 +455,104 @@ public class Sendly {
                 .url(baseUrl + path)
                 .delete()
                 .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
+
+        return executeWithRetry(reqBuilder.build());
+    }
+
+    /**
+     * Resolve an unversioned path (e.g. {@code /api/links}) against the API
+     * origin derived from the configured base URL. The base URL is the versioned
+     * {@code /api/v1} base; some endpoints (URL shortening) hang off the bare
+     * origin instead.
+     */
+    private HttpUrl unversionedUrl(String path) {
+        HttpUrl base = HttpUrl.parse(baseUrl);
+        HttpUrl resolved = base != null ? base.resolve(path) : HttpUrl.parse(baseUrl + path);
+        if (resolved == null) {
+            throw new IllegalArgumentException("Unable to resolve unversioned URL for path: " + path);
+        }
+        return resolved;
+    }
+
+    /**
+     * Make a GET request to an unversioned endpoint at the API origin.
+     *
+     * @param path   Origin-relative path (e.g. "/api/links")
+     * @param params Query parameters
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject getUnversioned(String path, Map<String, String> params) throws SendlyException {
+        HttpUrl.Builder urlBuilder = unversionedUrl(path).newBuilder();
+        if (params != null) {
+            params.forEach((key, value) -> {
+                if (value != null) {
+                    urlBuilder.addQueryParameter(key, value);
+                }
+            });
+        }
+
+        Request.Builder reqBuilder = new Request.Builder()
+                .url(urlBuilder.build())
+                .get()
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
+
+        return executeWithRetry(reqBuilder.build());
+    }
+
+    /**
+     * Make a POST request to an unversioned endpoint at the API origin.
+     *
+     * @param path Origin-relative path (e.g. "/api/links")
+     * @param body Request body
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject postUnversioned(String path, Object body) throws SendlyException {
+        String json = gson.toJson(body);
+        RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
+
+        Request.Builder reqBuilder = new Request.Builder()
+                .url(unversionedUrl(path))
+                .post(requestBody)
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("Accept", "application/json")
+                .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (organizationId != null && !organizationId.isEmpty()) {
+            reqBuilder.addHeader("X-Organization-Id", organizationId);
+        }
+
+        return executeWithRetry(reqBuilder.build());
+    }
+
+    /**
+     * Make a PATCH request to an unversioned endpoint at the API origin.
+     *
+     * @param path Origin-relative path (e.g. "/api/links/{code}")
+     * @param body Request body
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject patchUnversioned(String path, Object body) throws SendlyException {
+        String json = gson.toJson(body);
+        RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
+
+        Request.Builder reqBuilder = new Request.Builder()
+                .url(unversionedUrl(path))
+                .patch(requestBody)
+                .addHeader("Authorization", "Bearer " + apiKey)
+                .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
                 .addHeader("User-Agent", "sendly-java/" + VERSION);
         if (organizationId != null && !organizationId.isEmpty()) {

@@ -13,6 +13,7 @@ public class OwnedNumber {
     private String countryCode;
     private String phoneNumberType;
     private Integer monthlyCostCents;
+    private boolean isDefault;
     private String requirementsSubmittedAt;
     private boolean pendingCancellation;
     private String scheduledReleaseAt;
@@ -40,6 +41,9 @@ public class OwnedNumber {
         }
         if (json.has("monthlyCostCents") && !json.get("monthlyCostCents").isJsonNull()) {
             this.monthlyCostCents = json.get("monthlyCostCents").getAsInt();
+        }
+        if (json.has("isDefault") && !json.get("isDefault").isJsonNull()) {
+            this.isDefault = json.get("isDefault").getAsBoolean();
         }
         if (json.has("requirementsSubmittedAt") && !json.get("requirementsSubmittedAt").isJsonNull()) {
             this.requirementsSubmittedAt = json.get("requirementsSubmittedAt").getAsString();
@@ -72,6 +76,12 @@ public class OwnedNumber {
 
     /** Monthly cost in cents. */
     public Integer getMonthlyCostCents() { return monthlyCostCents; }
+
+    /**
+     * True if this is the workspace's default sending number. Only populated by
+     * {@code numbers().get(id)}; the list endpoint omits it (reads false).
+     */
+    public boolean isDefault() { return isDefault; }
 
     /** When regulatory documents were submitted (ISO-8601), or null if still required. */
     public String getRequirementsSubmittedAt() { return requirementsSubmittedAt; }

@@ -247,4 +247,47 @@ public class AccountResource {
             response.has("data") ? response.getAsJsonObject("data") : response;
         return new ApiKey(data);
     }
+
+    /**
+     * Rotate an API key. Issues a replacement key immediately and keeps the old
+     * key valid for a grace period (default 24 hours) so callers can cut over
+     * without downtime. The new raw key value is returned once and never again —
+     * store it securely.
+     *
+     * @param keyId API key ID to rotate
+     * @return The rotation result as JsonObject: {@code newKey} (with the raw
+     *         {@code key} value and a {@code warning}), {@code oldKey}, and a
+     *         {@code message}
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject rotateApiKey(String keyId) throws SendlyException {
+        return rotateApiKey(keyId, null);
+    }
+
+    /**
+     * Rotate an API key with a custom grace period.
+     *
+     * @param keyId            API key ID to rotate
+     * @param gracePeriodHours How long the old key stays valid (24-168 hours);
+     *                         null uses the default of 24 hours
+     * @return The rotation result as JsonObject: {@code newKey} (with the raw
+     *         {@code key} value and a {@code warning}), {@code oldKey}, and a
+     *         {@code message}
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject rotateApiKey(String keyId, Integer gracePeriodHours) throws SendlyException {
+        if (keyId == null || keyId.isEmpty()) {
+            throw new ValidationException("API key ID is required");
+        }
+        if (gracePeriodHours != null && (gracePeriodHours < 24 || gracePeriodHours > 168)) {
+            throw new ValidationException("Grace period must be between 24 and 168 hours");
+        }
+
+        JsonObject body = new JsonObject();
+        if (gracePeriodHours != null) {
+            body.addProperty("gracePeriodHours", gracePeriodHours);
+        }
+
+        return client.post("/account/keys/" + keyId + "/rotate", body);
+    }
 }

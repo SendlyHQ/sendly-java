@@ -24,20 +24,20 @@ Official Java SDK for the Sendly SMS API.
 <dependency>
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>3.31.0</version>
+    <version>3.36.0</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'live.sendly:sendly-java:3.31.0'
+implementation 'live.sendly:sendly-java:3.36.0'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("live.sendly:sendly-java:3.31.0")
+implementation("live.sendly:sendly-java:3.36.0")
 ```
 
 ## Quick Start
@@ -226,6 +226,44 @@ System.out.println("Credits needed: " + preview.getCreditsNeeded());
 System.out.println("Will send: " + preview.getWillSend() + ", Blocked: " + preview.getBlocked());
 ```
 
+### Group MMS
+
+Send a group MMS to 2-8 recipients (US/Canada only). Everyone in `to` shares one
+thread and replies fan out to all participants. Requires the `group_mms` feature.
+
+```java
+import java.util.List;
+
+GroupMessageResponse group = client.messages().sendGroup(
+    SendGroupMessageRequest.builder()
+        .to(List.of("+14155551234", "+14155555678"))
+        .text("Hey team - quick sync at noon?")
+        .build()
+);
+
+System.out.println(group.getId());              // msg_xxx
+System.out.println(group.getGroupMessageId());  // grp_xxx
+System.out.println(group.getStatus());          // sent
+```
+
+### AI Enhance
+
+Rewrite a draft message into a single polished SMS segment (≤160 chars).
+Requires the `ai_classification` feature; when AI is unavailable the original
+text is returned with an empty explanation.
+
+```java
+EnhanceMessageResponse result = client.messages().enhance(
+    EnhanceMessageRequest.builder()
+        .text("hey come check out our sale this weekend")
+        .messageType("marketing")
+        .build()
+);
+
+System.out.println(result.getEnhanced());     // polished rewrite
+System.out.println(result.getExplanation());  // what changed and why
+```
+
 ### Iterate All Messages
 
 ```java
@@ -242,6 +280,69 @@ for (Message message : client.messages().each(
 )) {
     System.out.println("Delivered: " + message.getId());
 }
+```
+
+## Numbers
+
+Discover, buy, and manage the phone numbers you own.
+
+```java
+// List the numbers you own
+OwnedNumbersResponse owned = client.numbers().list();
+for (OwnedNumber n : owned.getNumbers()) {
+    System.out.println(n.getPhoneNumber() + " (" + n.getStatus() + ")");
+}
+
+// Get one number, including whether it's your default sender
+OwnedNumber number = client.numbers().get("num_abc123");
+System.out.println(number.isDefault());
+
+// Make a number your default sender (it must be active)
+OwnedNumber updated = client.numbers().update("num_abc123",
+    UpdateNumberRequest.builder()
+        .isDefault(true)
+        .build());
+
+// Cancel a scheduled release ("keep this number")
+client.numbers().update("num_abc123",
+    UpdateNumberRequest.builder()
+        .pendingCancellation(false)
+        .build());
+
+// Release a number. A live paid purchase is cancelled at period end;
+// everything else is released immediately.
+ReleaseNumberResponse release = client.numbers().release("num_abc123");
+if (release.isScheduled()) {
+    System.out.println("Releases at " + release.getScheduledReleaseAt());
+} else {
+    System.out.println("Released");
+}
+```
+
+## Branded Short Links
+
+Mint branded short links for a destination URL, list them with click analytics,
+and toggle a per-link kill switch.
+
+> **Note**: URL shortening is gated behind the `url_shortener` rollout flag
+> (founder-only while dark). Calls return a `not_found` error until the flag is
+> on for your account.
+
+```java
+// Shorten a URL
+ShortLink link = client.links().create("https://example.com/spring-sale?utm_source=sms");
+System.out.println(link.getShortUrl()); // https://sendly.live/l/Ab3xY7
+
+// List your links with click counts
+ShortLinkListResponse listing = client.links().list(20, 0);
+for (ShortLinkListItem item : listing.getLinks()) {
+    System.out.println(item.getShortUrl() + " -> " + item.getDestinationUrl()
+        + " (" + item.getClickCount() + " clicks)");
+}
+
+// Kill a link (returns 404 on redirect until re-enabled)
+client.links().disable(link.getCode());
+client.links().enable(link.getCode());
 ```
 
 ## Webhooks
@@ -324,6 +425,16 @@ System.out.println("New key: " + newKey.get("key").getAsString());
 
 // Revoke an API key
 client.account().revokeApiKey("key_xxx");
+
+// Rotate an API key. Issues a replacement now and keeps the old key valid for a
+// grace period (default 24h; 24-168h) so you can cut over with no downtime. The
+// new raw key is shown only once.
+JsonObject rotated = client.account().rotateApiKey("key_xxx");
+System.out.println(rotated.getAsJsonObject("newKey").get("key").getAsString());
+
+// With a custom 72-hour grace period
+JsonObject rotated72 = client.account().rotateApiKey("key_xxx", 72);
+System.out.println(rotated72.get("message").getAsString());
 ```
 
 ## Error Handling
@@ -367,6 +478,7 @@ message.getUpdatedAt();    // Instant
 message.getDeliveredAt();  // Instant (nullable)
 message.getErrorCode();    // String (nullable)
 message.getErrorMessage(); // String (nullable)
+message.getMediaUrls();    // List<String> (nullable, MMS media)
 
 // Helper methods
 message.isDelivered();     // boolean

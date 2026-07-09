@@ -1,11 +1,14 @@
 package com.sendly.models;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -70,6 +73,9 @@ public class Message {
 
     private final Map<String, Object> metadata;
 
+    @SerializedName("media_urls")
+    private final List<String> mediaUrls;
+
     @SerializedName("ai_metadata")
     private final JsonObject aiMetadata;
 
@@ -100,7 +106,24 @@ public class Message {
         this.retryCount = json.has("retry_count") || json.has("retryCount") ?
             (json.has("retry_count") ? json.get("retry_count").getAsInt() : json.get("retryCount").getAsInt()) : 0;
         this.metadata = parseMetadata(json);
+        this.mediaUrls = parseStringArray(json, "media_urls", "mediaUrls");
         this.aiMetadata = parseJsonObject(json, "ai_metadata", "aiMetadata");
+    }
+
+    private List<String> parseStringArray(JsonObject json, String key1, String key2) {
+        String key = json.has(key1) && json.get(key1).isJsonArray() ? key1 :
+                json.has(key2) && json.get(key2).isJsonArray() ? key2 : null;
+        if (key == null) {
+            return null;
+        }
+        List<String> result = new ArrayList<>();
+        JsonArray array = json.getAsJsonArray(key);
+        for (int i = 0; i < array.size(); i++) {
+            if (!array.get(i).isJsonNull()) {
+                result.add(array.get(i).getAsString());
+            }
+        }
+        return result;
     }
 
     @SuppressWarnings("unchecked")
@@ -242,6 +265,13 @@ public class Message {
 
     public Map<String, Object> getMetadata() {
         return metadata;
+    }
+
+    /**
+     * Media URLs attached to the message (MMS), or {@code null} when none.
+     */
+    public List<String> getMediaUrls() {
+        return mediaUrls;
     }
 
     public JsonObject getAiMetadata() {

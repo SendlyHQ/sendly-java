@@ -8,8 +8,14 @@ import com.sendly.models.AvailableNumbersResponse;
 import com.sendly.models.BuyNumberRequest;
 import com.sendly.models.BuyNumberResponse;
 import com.sendly.models.NumberCountriesResponse;
+import com.sendly.models.OwnedNumber;
 import com.sendly.models.OwnedNumbersResponse;
+import com.sendly.models.ReleaseNumberResponse;
+import com.sendly.models.UpdateNumberRequest;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -136,6 +142,68 @@ public class NumbersResource {
     }
 
     /**
+     * Get a single phone number you own, including whether it is the workspace's
+     * default sender.
+     *
+     * @param id The number's id
+     * @return The owned-number record (including {@code isDefault})
+     * @throws SendlyException if the request fails (404 when no such number)
+     */
+    public OwnedNumber get(String id) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Number ID is required");
+        }
+        JsonObject response = client.get("/numbers/" + encodePathParam(id), null);
+        return new OwnedNumber(unwrap(response));
+    }
+
+    /**
+     * Update a phone number you own. Supply at least one supported mutation:
+     * <ul>
+     *   <li>{@code isDefault(true)} — make this the workspace's default sending
+     *       number (the number must be {@code active}).</li>
+     *   <li>{@code pendingCancellation(false)} — cancel a previously scheduled
+     *       release and keep the number.</li>
+     * </ul>
+     *
+     * @param id      The number's id
+     * @param request The mutation(s) to apply
+     * @return The updated owned-number record (including {@code isDefault})
+     * @throws SendlyException if the request fails (400 when no supported field
+     *                         is provided or {@code isDefault} is requested for a
+     *                         non-active number; 404 when no such number)
+     */
+    public OwnedNumber update(String id, UpdateNumberRequest request) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Number ID is required");
+        }
+        if (request == null || request.isEmpty()) {
+            throw new ValidationException(
+                "Provide at least one of isDefault(true) or pendingCancellation(false)");
+        }
+        JsonObject response = client.patch("/numbers/" + encodePathParam(id), request.toJson());
+        return new OwnedNumber(unwrap(response));
+    }
+
+    /**
+     * Release a phone number you own. A live paid purchase is cancelled at the
+     * end of the paid period (the response then carries {@code scheduled == true}
+     * and a {@code scheduledReleaseAt}); everything else is released immediately.
+     *
+     * @param id The number's id
+     * @return The release outcome (immediate or scheduled)
+     * @throws SendlyException if the request fails (400 when the carrier release
+     *                         failed; 404 when no such number)
+     */
+    public ReleaseNumberResponse release(String id) throws SendlyException {
+        if (id == null || id.isEmpty()) {
+            throw new ValidationException("Number ID is required");
+        }
+        JsonObject response = client.delete("/numbers/" + encodePathParam(id));
+        return new ReleaseNumberResponse(response);
+    }
+
+    /**
      * Buy a phone number. Asynchronous — returns a status.
      * <p>
      * When the status is {@code documents_required} or {@code payment_required},
@@ -167,5 +235,24 @@ public class NumbersResource {
 
         JsonObject response = client.post("/numbers/buy", request.toJson());
         return new BuyNumberResponse(response);
+    }
+
+    private JsonObject unwrap(JsonObject response) {
+        if (response.has("number") && response.get("number").isJsonObject()) {
+            return response.getAsJsonObject("number");
+        }
+        if (response.has("data") && response.get("data").isJsonObject()) {
+            return response.getAsJsonObject("data");
+        }
+        return response;
+    }
+
+    private String encodePathParam(String param) {
+        try {
+            return URLEncoder.encode(param, StandardCharsets.UTF_8.toString());
+        } catch (UnsupportedEncodingException e) {
+            // UTF-8 is always supported, this should never happen
+            return param;
+        }
     }
 }

@@ -9,6 +9,9 @@ import com.sendly.models.BatchMessageItem;
 import com.sendly.models.BatchMessageResponse;
 import com.sendly.models.BatchPreviewResponse;
 import com.sendly.models.CancelScheduledMessageResponse;
+import com.sendly.models.EnhanceMessageRequest;
+import com.sendly.models.EnhanceMessageResponse;
+import com.sendly.models.GroupMessageResponse;
 import com.sendly.models.ListBatchesRequest;
 import com.sendly.models.ListMessagesRequest;
 import com.sendly.models.ListScheduledMessagesRequest;
@@ -18,6 +21,7 @@ import com.sendly.models.ScheduledMessage;
 import com.sendly.models.ScheduledMessageList;
 import com.sendly.models.ScheduleMessageRequest;
 import com.sendly.models.SendBatchRequest;
+import com.sendly.models.SendGroupMessageRequest;
 import com.sendly.models.SendMessageRequest;
 
 import java.io.UnsupportedEncodingException;
@@ -71,6 +75,72 @@ public class Messages {
                 response.has("data") ? response.getAsJsonObject("data") : response;
 
         return new Message(data);
+    }
+
+    /**
+     * Send a group MMS to 2-8 recipients (US/Canada only).
+     * <p>
+     * Creates a multi-party MMS conversation: every recipient sees the others,
+     * and replies fan out to all participants. Group messaging is an A2P 10DLC
+     * capability — the sending number must be an MMS-enabled, 10DLC-registered
+     * number you own. Omit {@code from} to use your workspace's default sender.
+     * </p>
+     *
+     * @param request Group message details (2-8 recipients, text and/or media)
+     * @return The created group message, including a group_message_id
+     * @throws SendlyException if the request fails
+     */
+    public GroupMessageResponse sendGroup(SendGroupMessageRequest request) throws SendlyException {
+        if (request.getTo() == null || request.getTo().size() < 2) {
+            throw new ValidationException("Group messaging requires at least 2 recipients in 'to'");
+        }
+        if (request.getTo().size() > 8) {
+            throw new ValidationException("Group messaging supports at most 8 recipients");
+        }
+        for (String recipient : request.getTo()) {
+            validatePhone(recipient);
+        }
+        boolean hasMedia = request.getMediaUrls() != null && !request.getMediaUrls().isEmpty();
+        if ((request.getText() == null || request.getText().isEmpty()) && !hasMedia) {
+            throw new ValidationException("Provide 'text' or 'mediaUrls'");
+        }
+
+        JsonObject response = client.post("/messages/group", request);
+        JsonObject data = response.has("message") && response.get("message").isJsonObject() ?
+                response.getAsJsonObject("message") :
+                response.has("data") && response.get("data").isJsonObject() ?
+                        response.getAsJsonObject("data") : response;
+
+        return new GroupMessageResponse(data);
+    }
+
+    /**
+     * AI-enhance a draft message for clarity, compliance, and send-readiness.
+     * <p>
+     * Rewrites the supplied text into a single, polished SMS segment (≤160
+     * chars) and returns a short explanation of what changed. Pass
+     * {@code messageType} to steer the rewrite; with no {@code text} it generates
+     * a suitable message for that type instead. At least one of {@code text} or
+     * {@code messageType} is required. When AI enhancement is unavailable, the
+     * response falls back to the original text with an empty explanation.
+     * </p>
+     *
+     * @param request The draft text and/or a message-type hint
+     * @return The enhanced text, an explanation, and the model used
+     * @throws SendlyException if the request fails
+     */
+    public EnhanceMessageResponse enhance(EnhanceMessageRequest request) throws SendlyException {
+        boolean hasText = request.getText() != null && !request.getText().isEmpty();
+        boolean hasType = request.getMessageType() != null && !request.getMessageType().isEmpty();
+        if (!hasText && !hasType) {
+            throw new ValidationException("Provide 'text' or 'messageType'");
+        }
+
+        JsonObject response = client.post("/ai/enhance", request);
+        JsonObject data = response.has("data") && response.get("data").isJsonObject() ?
+                response.getAsJsonObject("data") : response;
+
+        return new EnhanceMessageResponse(data);
     }
 
     /**
