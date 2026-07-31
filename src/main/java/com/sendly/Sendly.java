@@ -21,6 +21,7 @@ import com.sendly.resources.BusinessUpgradeResource;
 import com.sendly.resources.NumbersResource;
 import com.sendly.resources.TenDlcResource;
 import com.sendly.resources.LinksResource;
+import com.sendly.resources.WhatsAppResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -67,6 +68,7 @@ public class Sendly {
     private final NumbersResource numbers;
     private final TenDlcResource tenDlc;
     private final LinksResource links;
+    private final WhatsAppResource whatsapp;
 
     /**
      * Create a new Sendly client with default settings.
@@ -120,6 +122,7 @@ public class Sendly {
         this.numbers = new NumbersResource(this);
         this.tenDlc = new TenDlcResource(this);
         this.links = new LinksResource(this);
+        this.whatsapp = new WhatsAppResource(this);
     }
 
     /**
@@ -273,6 +276,15 @@ public class Sendly {
      */
     public LinksResource links() {
         return links;
+    }
+
+    /**
+     * Get the WhatsApp resource (connect senders, templates, 24h windows).
+     *
+     * @return WhatsApp resource
+     */
+    public WhatsAppResource whatsapp() {
+        return whatsapp;
     }
 
     /**

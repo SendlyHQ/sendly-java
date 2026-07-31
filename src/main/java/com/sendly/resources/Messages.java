@@ -23,6 +23,8 @@ import com.sendly.models.ScheduleMessageRequest;
 import com.sendly.models.SendBatchRequest;
 import com.sendly.models.SendGroupMessageRequest;
 import com.sendly.models.SendMessageRequest;
+import com.sendly.models.SendWhatsAppMessageRequest;
+import com.sendly.models.WhatsAppMessage;
 
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
@@ -75,6 +77,33 @@ public class Messages {
                 response.has("data") ? response.getAsJsonObject("data") : response;
 
         return new Message(data);
+    }
+
+    /**
+     * Send a WhatsApp message.
+     * <p>
+     * Requires a live API key and a {@code from} number with an active
+     * WhatsApp connection (see {@code whatsapp().signup()}). Free-form
+     * {@code text} and media only deliver inside an open 24-hour
+     * customer-service window — outside it, send an approved {@code template}
+     * instead (check with {@code whatsapp().window(from, to)}).
+     * </p>
+     *
+     * @param request WhatsApp message details (text, media + caption, or template)
+     * @return The created WhatsApp message
+     * @throws SendlyException if the request fails
+     */
+    public WhatsAppMessage send(SendWhatsAppMessageRequest request) throws SendlyException {
+        validatePhone(request.getTo());
+        validatePhone(request.getFrom());
+        boolean hasMedia = request.getMediaUrls() != null && !request.getMediaUrls().isEmpty();
+        if ((request.getText() == null || request.getText().isEmpty())
+                && !hasMedia && request.getTemplate() == null) {
+            throw new ValidationException("Provide 'text', 'mediaUrls', or 'template'");
+        }
+
+        JsonObject response = client.post("/messages", request);
+        return new WhatsAppMessage(response);
     }
 
     /**

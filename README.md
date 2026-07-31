@@ -319,6 +319,87 @@ if (release.isScheduled()) {
 }
 ```
 
+## WhatsApp
+
+Connect a number you own to WhatsApp, create Meta-reviewed message templates,
+and send WhatsApp messages through the same `messages().send()` you use for SMS.
+
+> **Note**: WhatsApp is gated behind the `whatsapp_channel` rollout flag
+> (default-dark). Calls return a `not_found` error until the flag is on for
+> your account. Signup, template writes, and sends require a live API key.
+
+```java
+// 1. Connect a number ($19 one-time, no monthly fee). The connect URL must be
+//    opened by a human — they log in with Facebook in a browser to link their
+//    WhatsApp Business Account.
+WhatsAppSignupSession signup = client.whatsapp().signup().create("+15559876543");
+System.out.println("Have your user open: " + signup.getConnectUrl());
+
+// 2. Poll until active
+WhatsAppSignup status = client.whatsapp().signup().get(signup.getId());
+System.out.println(status.getStatus()); // initiated | registering | active | failed | expired
+
+// 3. List your WhatsApp senders
+WhatsAppSendersResponse senders = client.whatsapp().senders().list();
+for (WhatsAppSender s : senders.getSenders()) {
+    System.out.println(s.getPhoneNumber() + " (" + s.getStatus() + ", " + s.getQualityRating() + ")");
+}
+
+// 4. Create a template (Meta reviews it, usually 24-48h)
+WhatsAppTemplate template = client.whatsapp().templates().create(
+    CreateWhatsAppTemplateRequest.builder()
+        .sender("+15559876543")
+        .name("order_shipped")
+        .language("en_US")
+        .category("UTILITY")
+        .body("Hi {{1}}, your order {{2}} has shipped!")
+        .examples(Map.of("1", "Sam", "2", "#4821"))
+        .build());
+System.out.println(template.getStatus()); // PENDING
+
+// List / edit / delete templates. Editing a rejected template (rather than
+// deleting and re-creating it) is the recovery path — deleted template names
+// are locked for ~30 days.
+WhatsAppTemplateListResponse templates = client.whatsapp().templates().list();
+client.whatsapp().templates().update(template.getId(),
+    UpdateWhatsAppTemplateRequest.builder()
+        .body("Hi {{1}}, your order {{2}} is on its way!")
+        .examples(Map.of("1", "Sam", "2", "#4821"))
+        .build());
+client.whatsapp().templates().delete(template.getId());
+
+// 5. Check the 24-hour customer-service window. Free-form text and media only
+//    deliver while a window is open (it opens when the recipient messages you);
+//    outside it, send an approved template.
+WhatsAppWindow window = client.whatsapp().window("+15559876543", "+15551234567");
+if (window.isOpen()) {
+    // Free-form reply inside the open window
+    WhatsAppMessage message = client.messages().send(SendWhatsAppMessageRequest.builder()
+        .to("+15551234567")
+        .from("+15559876543")
+        .text("Your table is ready!")
+        .build());
+} else {
+    // Template send — works regardless of the window
+    WhatsAppMessage message = client.messages().send(SendWhatsAppMessageRequest.builder()
+        .to("+15551234567")
+        .from("+15559876543")
+        .template(new WhatsAppTemplateSendParams("order_shipped", "en_US",
+            Map.of("1", "Acme Inc", "2", "#4821")))
+        .build());
+    System.out.println(message.getWhatsapp().getKind());    // "template"
+    System.out.println(message.getCreditsUsed());           // priced by country + category
+}
+
+// Media send (one attachment; text becomes the caption)
+client.messages().send(SendWhatsAppMessageRequest.builder()
+    .to("+15551234567")
+    .from("+15559876543")
+    .text("Here's the menu")
+    .mediaUrls(List.of("https://example.com/menu.jpg"))
+    .build());
+```
+
 ## Branded Short Links
 
 Mint branded short links for a destination URL, list them with click analytics,
