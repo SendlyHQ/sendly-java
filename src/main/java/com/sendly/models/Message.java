@@ -19,6 +19,8 @@ public class Message {
     public static final String STATUS_QUEUED = "queued";
     public static final String STATUS_SENT = "sent";
     public static final String STATUS_DELIVERED = "delivered";
+    // Read receipts exist on RCS and WhatsApp only - SMS never reports one.
+    public static final String STATUS_READ = "read";
     public static final String STATUS_FAILED = "failed";
     public static final String STATUS_BOUNCED = "bounced";
     public static final String STATUS_RETRYING = "retrying";

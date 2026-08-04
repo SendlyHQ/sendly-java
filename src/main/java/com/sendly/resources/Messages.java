@@ -19,10 +19,12 @@ import com.sendly.models.Message;
 import com.sendly.models.MessageList;
 import com.sendly.models.ScheduledMessage;
 import com.sendly.models.ScheduledMessageList;
+import com.sendly.models.RcsMessage;
 import com.sendly.models.ScheduleMessageRequest;
 import com.sendly.models.SendBatchRequest;
 import com.sendly.models.SendGroupMessageRequest;
 import com.sendly.models.SendMessageRequest;
+import com.sendly.models.SendRcsMessageRequest;
 import com.sendly.models.SendWhatsAppMessageRequest;
 import com.sendly.models.WhatsAppMessage;
 
@@ -104,6 +106,37 @@ public class Messages {
 
         JsonObject response = client.post("/messages", request);
         return new WhatsAppMessage(response);
+    }
+
+    /**
+     * Send an RCS message.
+     * <p>
+     * Requires a live API key and an RCS agent registered on your workspace
+     * (see {@code rcs().agents()}). Provide exactly one of {@code text} or
+     * {@code card}. Text sends fall back to SMS (billed as SMS) for
+     * recipients whose device doesn't support RCS — check
+     * {@code getFellBackTo()} on the response; rich cards have no SMS form
+     * and never fall back.
+     * </p>
+     *
+     * @param request RCS message details (text + optional suggestions, or a rich card)
+     * @return The created message — native RCS or its SMS fallback
+     * @throws SendlyException if the request fails
+     */
+    public RcsMessage send(SendRcsMessageRequest request) throws SendlyException {
+        validatePhone(request.getTo());
+        boolean hasText = request.getText() != null && !request.getText().isEmpty();
+        boolean hasCard = request.getCard() != null;
+        if (hasText == hasCard) {
+            throw new ValidationException("Provide exactly one of 'text' or 'card'");
+        }
+        boolean hasSuggestions = request.getSuggestions() != null && !request.getSuggestions().isEmpty();
+        if (hasSuggestions && !hasText) {
+            throw new ValidationException("'suggestions' ride on text messages. Put card buttons in card.suggestions instead");
+        }
+
+        JsonObject response = client.post("/messages", request);
+        return new RcsMessage(response);
     }
 
     /**

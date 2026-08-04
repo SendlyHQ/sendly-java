@@ -22,6 +22,7 @@ import com.sendly.resources.NumbersResource;
 import com.sendly.resources.TenDlcResource;
 import com.sendly.resources.LinksResource;
 import com.sendly.resources.WhatsAppResource;
+import com.sendly.resources.RcsResource;
 import okhttp3.*;
 
 import java.io.IOException;
@@ -69,6 +70,7 @@ public class Sendly {
     private final TenDlcResource tenDlc;
     private final LinksResource links;
     private final WhatsAppResource whatsapp;
+    private final RcsResource rcs;
 
     /**
      * Create a new Sendly client with default settings.
@@ -123,6 +125,7 @@ public class Sendly {
         this.tenDlc = new TenDlcResource(this);
         this.links = new LinksResource(this);
         this.whatsapp = new WhatsAppResource(this);
+        this.rcs = new RcsResource(this);
     }
 
     /**
@@ -285,6 +288,15 @@ public class Sendly {
      */
     public WhatsAppResource whatsapp() {
         return whatsapp;
+    }
+
+    /**
+     * Get the RCS resource (agents, recipient capability).
+     *
+     * @return RCS resource
+     */
+    public RcsResource rcs() {
+        return rcs;
     }
 
     /**

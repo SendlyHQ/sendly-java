@@ -5,7 +5,9 @@ import com.sendly.Sendly;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
 import com.sendly.models.CreateWhatsAppTemplateRequest;
+import com.sendly.models.UpdateWhatsAppSenderProfileRequest;
 import com.sendly.models.UpdateWhatsAppTemplateRequest;
+import com.sendly.models.WhatsAppSenderProfile;
 import com.sendly.models.WhatsAppSendersResponse;
 import com.sendly.models.WhatsAppSignup;
 import com.sendly.models.WhatsAppSignupSession;
@@ -96,7 +98,8 @@ public class WhatsAppResource {
     }
 
     /**
-     * List the numbers connected (or connecting) to WhatsApp.
+     * List the numbers connected (or connecting) to WhatsApp and manage
+     * their business profiles.
      */
     public Senders senders() {
         return senders;
@@ -192,7 +195,8 @@ public class WhatsAppResource {
     }
 
     /**
-     * WhatsApp senders sub-resource — the numbers connected to WhatsApp.
+     * WhatsApp senders sub-resource — the numbers connected to WhatsApp and
+     * their business profiles.
      */
     public static class Senders {
         private final Sendly client;
@@ -214,6 +218,51 @@ public class WhatsAppResource {
         public WhatsAppSendersResponse list() throws SendlyException {
             JsonObject response = client.get("/whatsapp/senders", null);
             return new WhatsAppSendersResponse(response);
+        }
+
+        /**
+         * Get a sender's WhatsApp business profile.
+         * <p>
+         * Returns what recipients see on the sender's contact card: display
+         * name, photo, category, about line, description, and contact
+         * details. The sender must be actively connected to WhatsApp.
+         *
+         * @param phoneNumber The WhatsApp-connected sender, in E.164 format
+         * @return The sender's business profile
+         * @throws SendlyException if the request fails (404 when the number
+         *                         isn't connected)
+         */
+        public WhatsAppSenderProfile getProfile(String phoneNumber) throws SendlyException {
+            validatePhone(phoneNumber);
+
+            JsonObject response = client.get(
+                "/whatsapp/senders/" + encodePathParam(phoneNumber) + "/profile", null);
+            return new WhatsAppSenderProfile(response);
+        }
+
+        /**
+         * Update a sender's WhatsApp business profile.
+         * <p>
+         * Supply only the fields to change (at least one); omitted fields
+         * keep their current value. {@code about} is capped at 139 characters
+         * and {@code description} at 512. Requires a live API key.
+         *
+         * @param phoneNumber The WhatsApp-connected sender, in E.164 format
+         * @param request     The profile fields to change
+         * @return The updated business profile
+         * @throws SendlyException if the request fails (404 when the number
+         *                         isn't connected)
+         */
+        public WhatsAppSenderProfile updateProfile(String phoneNumber, UpdateWhatsAppSenderProfileRequest request)
+                throws SendlyException {
+            validatePhone(phoneNumber);
+            if (request == null) {
+                throw new ValidationException("Request is required");
+            }
+
+            JsonObject response = client.patch(
+                "/whatsapp/senders/" + encodePathParam(phoneNumber) + "/profile", request);
+            return new WhatsAppSenderProfile(response);
         }
     }
 

@@ -398,6 +398,95 @@ client.messages().send(SendWhatsAppMessageRequest.builder()
     .text("Here's the menu")
     .mediaUrls(List.of("https://example.com/menu.jpg"))
     .build());
+
+// 6. Read and edit a sender's business profile — the contact card recipients
+//    see. Supply only the fields to change; omitted fields keep their value.
+WhatsAppSenderProfile profile = client.whatsapp().senders().getProfile("+15559876543");
+System.out.println(profile.getDisplayName() + " — " + profile.getAbout());
+
+client.whatsapp().senders().updateProfile("+15559876543",
+    UpdateWhatsAppSenderProfileRequest.builder()
+        .about("Fast delivery, friendly service")   // max 139 chars
+        .description("Acme sells everything.")      // max 512 chars
+        .website("https://example.com")
+        .build());
+```
+
+## RCS
+
+Send branded rich messaging — cards and suggestion chips — through the same
+`messages().send()` you use for SMS. Plain-text RCS sends fall back to SMS
+automatically for recipients whose device can't receive RCS.
+
+> **Note**: RCS is gated behind the `rcs_channel` rollout flag (default-dark).
+> Calls return a `not_found` error until the flag is on for your account. Sends
+> and capability checks require a live API key.
+
+```java
+// 1. Find your agent — the brand identity your messages are sent as. Contact
+//    support to register one; "testing" reaches invited test numbers only,
+//    "approved" reaches everyone.
+RcsAgentsResponse agents = client.rcs().agents().list();
+for (RcsAgent agent : agents.getAgents()) {
+    System.out.println(agent.getName() + " (" + agent.getStatus() + ", sendable=" + agent.isSendable() + ")");
+}
+
+// 2. Optional pre-flight: can this recipient receive RCS?
+RcsCapability capability = client.rcs().capability("+15551234567");
+System.out.println(capability.isCapable());   // false -> text falls back to SMS
+System.out.println(capability.getFeatures()); // device features, empty when not capable
+
+// 3. Send text, optionally with suggestion chips. A reply chip's tap comes
+//    back as an inbound message carrying your postbackData; an action chip
+//    opens a URL.
+RcsMessage message = client.messages().send(SendRcsMessageRequest.builder()
+    .to("+15551234567")
+    .text("Your order #4821 has shipped!")
+    .suggestions(List.of(
+        RcsSuggestion.reply("Thanks", "thanks"),
+        RcsSuggestion.action("Track", "track", "https://example.com/track/4821")))
+    .build());
+
+// The response tells you which leg delivered
+if (message.getFellBackTo() != null) {
+    // Not RCS-capable: sent and billed as SMS, chips dropped
+    System.out.println(message.getChannel());                      // "sms"
+    System.out.println(message.getRcs().getRequestedChannel());    // "rcs"
+    System.out.println(message.getRcs().getSuggestionsDropped());  // true
+} else {
+    System.out.println(message.getChannel());              // "rcs"
+    System.out.println(message.getRcs().getKind());        // "text"
+    System.out.println(message.getRcs().getAgentName());   // "Acme Inc"
+}
+
+// 4. Send a rich card. Cards have no SMS form — a card to a non-RCS recipient
+//    fails with rcs_not_supported_for_recipient rather than falling back.
+client.messages().send(SendRcsMessageRequest.builder()
+    .to("+15551234567")
+    .card(RcsCard.builder()
+        .title("Order #4821 shipped")
+        .description("Arriving Thursday")
+        .mediaUrl("https://example.com/package.jpg")  // public JPEG, PNG, or GIF
+        .orientation("vertical")                      // or "horizontal"
+        .suggestions(List.of(
+            RcsSuggestion.action("Track", "track", "https://example.com/track/4821")))
+        .build())
+    .build());
+
+// Opt out of the SMS fallback to get a 422 instead of an SMS charge
+client.messages().send(SendRcsMessageRequest.builder()
+    .to("+15551234567")
+    .text("RCS only, please")
+    .fallbackToSms(false)
+    .build());
+
+// Pass agentId when your workspace has more than one agent (otherwise the
+// send fails with rcs_agent_ambiguous)
+client.messages().send(SendRcsMessageRequest.builder()
+    .to("+15551234567")
+    .agentId("rag_abc123")
+    .text("Your order #4821 has shipped!")
+    .build());
 ```
 
 ## Branded Short Links

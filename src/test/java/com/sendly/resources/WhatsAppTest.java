@@ -4,8 +4,10 @@ import com.sendly.Sendly;
 import com.sendly.TestHelpers;
 import com.sendly.exceptions.*;
 import com.sendly.models.CreateWhatsAppTemplateRequest;
+import com.sendly.models.UpdateWhatsAppSenderProfileRequest;
 import com.sendly.models.UpdateWhatsAppTemplateRequest;
 import com.sendly.models.WhatsAppSender;
+import com.sendly.models.WhatsAppSenderProfile;
 import com.sendly.models.WhatsAppSendersResponse;
 import com.sendly.models.WhatsAppSignup;
 import com.sendly.models.WhatsAppSignupSession;
@@ -205,6 +207,130 @@ class WhatsAppTest {
 
         assertNotNull(response);
         assertTrue(response.getSenders().isEmpty());
+    }
+
+    // ==================== senders().getProfile() Tests ====================
+
+    @Test
+    void testSendersGetProfile_happyPath() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"phoneNumber\":\"+15559876543\",\"displayName\":\"Acme Inc\"," +
+            "\"profilePhotoUrl\":\"https://example.com/logo.png\",\"category\":\"Retail\"," +
+            "\"about\":\"Fast delivery, friendly service\",\"description\":\"Acme sells everything.\"," +
+            "\"email\":\"help@example.com\",\"website\":\"https://example.com\"," +
+            "\"address\":\"123 Main St, Springfield\"}"
+        ));
+
+        WhatsAppSenderProfile profile = client.whatsapp().senders().getProfile("+15559876543");
+
+        assertNotNull(profile);
+        assertEquals("+15559876543", profile.getPhoneNumber());
+        assertEquals("Acme Inc", profile.getDisplayName());
+        assertEquals("https://example.com/logo.png", profile.getProfilePhotoUrl());
+        assertEquals("Retail", profile.getCategory());
+        assertEquals("Fast delivery, friendly service", profile.getAbout());
+        assertEquals("Acme sells everything.", profile.getDescription());
+        assertEquals("help@example.com", profile.getEmail());
+        assertEquals("https://example.com", profile.getWebsite());
+        assertEquals("123 Main St, Springfield", profile.getAddress());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("GET", request.getMethod());
+        assertTrue(request.getPath().contains("/whatsapp/senders/%2B15559876543/profile"));
+    }
+
+    @Test
+    void testSendersGetProfile_emptyProfile_nullFields() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"phoneNumber\":\"+15559876543\",\"displayName\":null,\"profilePhotoUrl\":null," +
+            "\"category\":null,\"about\":null,\"description\":null,\"email\":null," +
+            "\"website\":null,\"address\":null}"
+        ));
+
+        WhatsAppSenderProfile profile = client.whatsapp().senders().getProfile("+15559876543");
+
+        assertEquals("+15559876543", profile.getPhoneNumber());
+        assertNull(profile.getDisplayName());
+        assertNull(profile.getProfilePhotoUrl());
+        assertNull(profile.getAbout());
+        assertNull(profile.getDescription());
+    }
+
+    @Test
+    void testSendersGetProfile_invalidPhone_throwsValidationException() {
+        assertThrows(ValidationException.class, () -> {
+            client.whatsapp().senders().getProfile("invalid");
+        });
+        assertThrows(ValidationException.class, () -> {
+            client.whatsapp().senders().getProfile(null);
+        });
+    }
+
+    @Test
+    void testSendersGetProfile_404NotConnected_throwsNotFoundException() {
+        mockServer.enqueue(TestHelpers.mockNotFound());
+
+        assertThrows(NotFoundException.class, () -> {
+            client.whatsapp().senders().getProfile("+15559876543");
+        });
+    }
+
+    // ==================== senders().updateProfile() Tests ====================
+
+    @Test
+    void testSendersUpdateProfile_happyPath() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"phoneNumber\":\"+15559876543\",\"displayName\":\"Acme Inc\"," +
+            "\"profilePhotoUrl\":null,\"category\":\"Retail\"," +
+            "\"about\":\"Fast delivery, friendly service\",\"description\":null," +
+            "\"email\":null,\"website\":\"https://example.com\",\"address\":null}"
+        ));
+
+        WhatsAppSenderProfile profile = client.whatsapp().senders().updateProfile("+15559876543",
+            UpdateWhatsAppSenderProfileRequest.builder()
+                .about("Fast delivery, friendly service")
+                .website("https://example.com")
+                .build());
+
+        assertEquals("+15559876543", profile.getPhoneNumber());
+        assertEquals("Fast delivery, friendly service", profile.getAbout());
+        assertEquals("https://example.com", profile.getWebsite());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("PATCH", request.getMethod());
+        assertTrue(request.getPath().contains("/whatsapp/senders/%2B15559876543/profile"));
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("\"about\":\"Fast delivery, friendly service\""));
+        assertTrue(body.contains("\"website\":\"https://example.com\""));
+        assertFalse(body.contains("displayName"));
+        assertFalse(body.contains("description"));
+        assertFalse(body.contains("category"));
+        assertFalse(body.contains("email"));
+        assertFalse(body.contains("address"));
+    }
+
+    @Test
+    void testSendersUpdateProfile_missingArgs_throwsValidationException() {
+        assertThrows(ValidationException.class, () -> {
+            client.whatsapp().senders().updateProfile("invalid",
+                UpdateWhatsAppSenderProfileRequest.builder().about("Hi").build());
+        });
+        assertThrows(ValidationException.class, () -> {
+            client.whatsapp().senders().updateProfile("+15559876543", null);
+        });
+    }
+
+    @Test
+    void testSendersUpdateProfile_403TestKey_throwsSendlyException() {
+        mockServer.enqueue(TestHelpers.mockSuccess("{}").setResponseCode(403)
+                .setBody("{\"error\":\"whatsapp_requires_live_key\"," +
+                        "\"message\":\"WhatsApp requires a live API key. Test keys cannot update sender profiles.\"}"));
+
+        SendlyException e = assertThrows(SendlyException.class, () -> {
+            client.whatsapp().senders().updateProfile("+15559876543",
+                UpdateWhatsAppSenderProfileRequest.builder().about("Hi").build());
+        });
+        assertEquals("WhatsApp requires a live API key. Test keys cannot update sender profiles.", e.getMessage());
     }
 
     // ==================== templates().list() Tests ====================
