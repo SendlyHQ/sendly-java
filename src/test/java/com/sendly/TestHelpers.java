@@ -143,34 +143,57 @@ public class TestHelpers {
     }
 
     /**
-     * Create a JSON response for a batch send.
+     * Create a JSON response for a batch send (POST /messages/batch).
+     *
+     * <p>Mirrors the live payload: the batch is identified by {@code batchId},
+     * progress is reported as {@code sent}, and there is no {@code queued}
+     * count and no {@code createdAt}.</p>
      */
-    public static String batchResponseJson(String batchId, int total, int queued, int failed) {
-        // Determine status based on success/failure counts
-        String status;
-        if (queued == 0) {
-            status = "failed";
-        } else if (failed > 0) {
-            status = "partial_failure";
-        } else {
-            status = "completed";
-        }
-
+    public static String batchResponseJson(String batchId, int total, int sent, int failed) {
         StringBuilder json = new StringBuilder(String.format(
-            "{\"batch_id\":\"%s\",\"status\":\"%s\",\"total\":%d,\"queued\":%d,\"failed\":%d,\"credits_used\":%d,\"messages\":[",
-            batchId, status, total, queued, failed, queued
+            "{\"batchId\":\"%s\",\"status\":\"%s\",\"total\":%d,\"sent\":%d,\"failed\":%d,"
+                + "\"optedOutSkipped\":0,\"invalidSkipped\":0,\"creditsUsed\":%d,\"creditsRefunded\":0,\"messages\":[",
+            batchId, batchStatus(sent, failed), total, sent, failed, sent
         ));
+        appendBatchMessages(json, total, sent);
+        json.append("]}");
+        return json.toString();
+    }
+
+    /**
+     * Create a JSON response for a batch fetch (GET /messages/batch/:id).
+     *
+     * <p>Mirrors the live payload: the batch is identified by {@code id} and
+     * carries the {@code queued} count plus timestamps the send response omits.</p>
+     */
+    public static String batchStatusJson(String batchId, int total, int queued, int failed) {
+        StringBuilder json = new StringBuilder(String.format(
+            "{\"id\":\"%s\",\"status\":\"%s\",\"total\":%d,\"queued\":%d,\"sent\":%d,\"delivered\":0,\"failed\":%d,"
+                + "\"creditsReserved\":%d,\"creditsUsed\":%d,\"creditsRefunded\":0,"
+                + "\"createdAt\":\"2025-01-15T10:00:00.000Z\",\"completedAt\":null,\"messages\":[",
+            batchId, batchStatus(queued, failed), total, queued, queued, failed, queued, queued
+        ));
+        appendBatchMessages(json, total, queued);
+        json.append("]}");
+        return json.toString();
+    }
+
+    /** Derive the batch status the server would report from the two counts. */
+    private static String batchStatus(int succeeded, int failed) {
+        if (succeeded == 0) return "failed";
+        return failed > 0 ? "partial_failure" : "completed";
+    }
+
+    /** Append per-message results: the first {@code succeeded} queued, the rest failed. */
+    private static void appendBatchMessages(StringBuilder json, int total, int succeeded) {
         for (int i = 0; i < total; i++) {
             if (i > 0) json.append(",");
-            String msgStatus = i < queued ? "queued" : "failed";
-            String error = i < queued ? null : "Invalid phone number";
+            boolean ok = i < succeeded;
             json.append(String.format(
                 "{\"id\":\"msg_%d\",\"to\":\"+155512345%02d\",\"status\":\"%s\"%s}",
-                i, i, msgStatus, error != null ? ",\"error\":\"" + error + "\"" : ""
+                i, i, ok ? "queued" : "failed", ok ? "" : ",\"error\":\"Invalid phone number\""
             ));
         }
-        json.append("],\"created_at\":\"2025-01-15T10:00:00.000Z\"}");
-        return json.toString();
     }
 
     /**
@@ -181,7 +204,9 @@ public class TestHelpers {
         for (int i = 0; i < count; i++) {
             if (i > 0) json.append(",");
             json.append(String.format(
-                "{\"batch_id\":\"batch_%d\",\"status\":\"completed\",\"total\":10,\"queued\":10,\"failed\":0,\"credits_used\":10,\"created_at\":\"2025-01-15T10:00:00.000Z\"}",
+                "{\"id\":\"batch_%d\",\"status\":\"completed\",\"total\":10,\"queued\":10,\"sent\":10,\"delivered\":10,"
+                    + "\"failed\":0,\"creditsReserved\":10,\"creditsUsed\":10,\"creditsRefunded\":0,"
+                    + "\"createdAt\":\"2025-01-15T10:00:00.000Z\",\"completedAt\":null}",
                 offset + i
             ));
         }

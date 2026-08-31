@@ -12,6 +12,7 @@ import com.sendly.models.CancelScheduledMessageResponse;
 import com.sendly.models.EnhanceMessageRequest;
 import com.sendly.models.EnhanceMessageResponse;
 import com.sendly.models.GroupMessageResponse;
+import com.sendly.models.IdempotentRequestOptions;
 import com.sendly.models.ListBatchesRequest;
 import com.sendly.models.ListMessagesRequest;
 import com.sendly.models.ListScheduledMessagesRequest;
@@ -70,10 +71,29 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public Message send(SendMessageRequest request) throws SendlyException {
+        return send(request, null);
+    }
+
+    /**
+     * Send an SMS message with per-call options.
+     * <p>
+     * The SDK already generates an idempotency key per logical request
+     * automatically, so the server can dedupe the SDK's own timeout retries.
+     * Supply your own key when you need idempotency across process restarts
+     * or your own retry loops — repeating a request with the same key within
+     * 24 hours returns the original response instead of executing again.
+     * </p>
+     *
+     * @param request Send message request
+     * @param options Per-call options (optional idempotency key)
+     * @return The sent message
+     * @throws SendlyException if the request fails
+     */
+    public Message send(SendMessageRequest request, IdempotentRequestOptions options) throws SendlyException {
         validatePhone(request.getTo());
         validateText(request.getText());
 
-        JsonObject response = client.post("/messages", request);
+        JsonObject response = client.post("/messages", request, idempotencyKeyOf(options));
         JsonObject data = response.has("message") ?
                 response.getAsJsonObject("message") :
                 response.has("data") ? response.getAsJsonObject("data") : response;
@@ -96,6 +116,22 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public WhatsAppMessage send(SendWhatsAppMessageRequest request) throws SendlyException {
+        return send(request, null);
+    }
+
+    /**
+     * Send a WhatsApp message with per-call options.
+     * <p>
+     * See {@link #send(SendMessageRequest, IdempotentRequestOptions)} for
+     * idempotency-key semantics.
+     * </p>
+     *
+     * @param request WhatsApp message details (text, media + caption, or template)
+     * @param options Per-call options (optional idempotency key)
+     * @return The created WhatsApp message
+     * @throws SendlyException if the request fails
+     */
+    public WhatsAppMessage send(SendWhatsAppMessageRequest request, IdempotentRequestOptions options) throws SendlyException {
         validatePhone(request.getTo());
         validatePhone(request.getFrom());
         boolean hasMedia = request.getMediaUrls() != null && !request.getMediaUrls().isEmpty();
@@ -104,7 +140,7 @@ public class Messages {
             throw new ValidationException("Provide 'text', 'mediaUrls', or 'template'");
         }
 
-        JsonObject response = client.post("/messages", request);
+        JsonObject response = client.post("/messages", request, idempotencyKeyOf(options));
         return new WhatsAppMessage(response);
     }
 
@@ -124,6 +160,22 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public RcsMessage send(SendRcsMessageRequest request) throws SendlyException {
+        return send(request, null);
+    }
+
+    /**
+     * Send an RCS message with per-call options.
+     * <p>
+     * See {@link #send(SendMessageRequest, IdempotentRequestOptions)} for
+     * idempotency-key semantics.
+     * </p>
+     *
+     * @param request RCS message details (text + optional suggestions, or a rich card)
+     * @param options Per-call options (optional idempotency key)
+     * @return The created message — native RCS or its SMS fallback
+     * @throws SendlyException if the request fails
+     */
+    public RcsMessage send(SendRcsMessageRequest request, IdempotentRequestOptions options) throws SendlyException {
         validatePhone(request.getTo());
         boolean hasText = request.getText() != null && !request.getText().isEmpty();
         boolean hasCard = request.getCard() != null;
@@ -135,7 +187,7 @@ public class Messages {
             throw new ValidationException("'suggestions' ride on text messages. Put card buttons in card.suggestions instead");
         }
 
-        JsonObject response = client.post("/messages", request);
+        JsonObject response = client.post("/messages", request, idempotencyKeyOf(options));
         return new RcsMessage(response);
     }
 
@@ -153,6 +205,22 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public GroupMessageResponse sendGroup(SendGroupMessageRequest request) throws SendlyException {
+        return sendGroup(request, null);
+    }
+
+    /**
+     * Send a group MMS with per-call options.
+     * <p>
+     * See {@link #send(SendMessageRequest, IdempotentRequestOptions)} for
+     * idempotency-key semantics.
+     * </p>
+     *
+     * @param request Group message details (2-8 recipients, text and/or media)
+     * @param options Per-call options (optional idempotency key)
+     * @return The created group message, including a group_message_id
+     * @throws SendlyException if the request fails
+     */
+    public GroupMessageResponse sendGroup(SendGroupMessageRequest request, IdempotentRequestOptions options) throws SendlyException {
         if (request.getTo() == null || request.getTo().size() < 2) {
             throw new ValidationException("Group messaging requires at least 2 recipients in 'to'");
         }
@@ -167,7 +235,7 @@ public class Messages {
             throw new ValidationException("Provide 'text' or 'mediaUrls'");
         }
 
-        JsonObject response = client.post("/messages/group", request);
+        JsonObject response = client.post("/messages/group", request, idempotencyKeyOf(options));
         JsonObject data = response.has("message") && response.get("message").isJsonObject() ?
                 response.getAsJsonObject("message") :
                 response.has("data") && response.get("data").isJsonObject() ?
@@ -289,11 +357,27 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public ScheduledMessage schedule(ScheduleMessageRequest request) throws SendlyException {
+        return schedule(request, null);
+    }
+
+    /**
+     * Schedule a message for future delivery with per-call options.
+     * <p>
+     * See {@link #send(SendMessageRequest, IdempotentRequestOptions)} for
+     * idempotency-key semantics.
+     * </p>
+     *
+     * @param request Schedule message request
+     * @param options Per-call options (optional idempotency key)
+     * @return The scheduled message
+     * @throws SendlyException if the request fails
+     */
+    public ScheduledMessage schedule(ScheduleMessageRequest request, IdempotentRequestOptions options) throws SendlyException {
         validatePhone(request.getTo());
         validateText(request.getText());
         validateScheduledAt(request.getScheduledAt());
 
-        JsonObject response = client.post("/messages/schedule", request);
+        JsonObject response = client.post("/messages/schedule", request, idempotencyKeyOf(options));
         JsonObject data = response.has("data") ?
                 response.getAsJsonObject("data") : response;
 
@@ -369,6 +453,22 @@ public class Messages {
      * @throws SendlyException if the request fails
      */
     public BatchMessageResponse sendBatch(SendBatchRequest request) throws SendlyException {
+        return sendBatch(request, null);
+    }
+
+    /**
+     * Send a batch of messages with per-call options.
+     * <p>
+     * See {@link #send(SendMessageRequest, IdempotentRequestOptions)} for
+     * idempotency-key semantics.
+     * </p>
+     *
+     * @param request Batch send request
+     * @param options Per-call options (optional idempotency key)
+     * @return The batch response with results
+     * @throws SendlyException if the request fails
+     */
+    public BatchMessageResponse sendBatch(SendBatchRequest request, IdempotentRequestOptions options) throws SendlyException {
         if (request.getMessages() == null || request.getMessages().isEmpty()) {
             throw new ValidationException("At least one message is required");
         }
@@ -379,7 +479,10 @@ public class Messages {
             validateText(item.getText());
         }
 
-        JsonObject response = client.post("/messages/batch", request);
+        // The batch endpoint dedupes header-less retries server-side by hashing
+        // the request content; an auto-generated key would bypass that net for
+        // identical cross-process re-runs, so only caller-supplied keys are sent.
+        JsonObject response = client.post("/messages/batch", request, idempotencyKeyOf(options), false);
         return new BatchMessageResponse(response);
     }
 
@@ -445,6 +548,10 @@ public class Messages {
     }
 
     // ==================== Validation Helpers ====================
+
+    private static String idempotencyKeyOf(IdempotentRequestOptions options) {
+        return options != null ? options.getIdempotencyKey() : null;
+    }
 
     private void validatePhone(String phone) throws ValidationException {
         if (phone == null || !PHONE_PATTERN.matcher(phone).matches()) {

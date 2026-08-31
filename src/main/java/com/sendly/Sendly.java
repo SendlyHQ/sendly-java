@@ -28,7 +28,9 @@ import okhttp3.*;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Sendly API Client
@@ -45,6 +47,8 @@ public class Sendly {
     public static final String VERSION = "3.37.1";
     public static final String DEFAULT_BASE_URL = "https://sendly.live/api/v1";
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
+
+    private static final Pattern PRINTABLE_ASCII_PATTERN = Pattern.compile("^[\\x20-\\x7E]+$");
 
     private final String apiKey;
     private final String baseUrl;
@@ -369,6 +373,11 @@ public class Sendly {
 
     /**
      * Make a POST request.
+     * <p>
+     * An idempotency key is generated automatically and reused across retry
+     * attempts, so the server can recognize a retry of a request that already
+     * reached it (see {@link #post(String, Object, String)}).
+     * </p>
      *
      * @param path API endpoint path
      * @param body Request body
@@ -376,6 +385,50 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject post(String path, Object body) throws SendlyException {
+        return post(path, body, null);
+    }
+
+    /**
+     * Make a POST request with an idempotency key.
+     *
+     * @param path           API endpoint path
+     * @param body           Request body
+     * @param idempotencyKey Idempotency key for this request (1-255 printable
+     *                       ASCII characters). When null, a unique key is
+     *                       generated automatically and reused across retry
+     *                       attempts, so on endpoints with idempotency support
+     *                       the server can recognize a retry of a request that
+     *                       already reached it and return the original result
+     *                       instead of executing again. Supply your own key to
+     *                       extend that protection across process restarts.
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject post(String path, Object body, String idempotencyKey) throws SendlyException {
+        return post(path, body, idempotencyKey, true);
+    }
+
+    /**
+     * Make a POST request with an idempotency key and control over key
+     * auto-generation.
+     *
+     * @param path               API endpoint path
+     * @param body               Request body
+     * @param idempotencyKey     Caller-supplied idempotency key (may be null)
+     * @param autoIdempotencyKey Set to false to skip auto-generating an
+     *                           idempotency key. Used for the batch endpoint,
+     *                           where the server dedupes header-less retries by
+     *                           request content and an auto key would bypass
+     *                           that net. A caller-supplied idempotencyKey is
+     *                           always sent regardless.
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject post(String path, Object body, String idempotencyKey, boolean autoIdempotencyKey) throws SendlyException {
+        String callerKey = normalizeIdempotencyKey(idempotencyKey);
+        String key = callerKey != null ? callerKey
+                : autoIdempotencyKey ? generateIdempotencyKey() : null;
+
         String json = gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
@@ -386,11 +439,14 @@ public class Sendly {
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
                 .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (key != null) {
+            reqBuilder.addHeader("Idempotency-Key", key);
+        }
         if (organizationId != null && !organizationId.isEmpty()) {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build());
+        return executeWithRetry(reqBuilder.build(), callerKey == null && key != null);
     }
 
     /**
@@ -433,12 +489,13 @@ public class Sendly {
                 .post(requestBody)
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION);
+                .addHeader("User-Agent", "sendly-java/" + VERSION)
+                .addHeader("Idempotency-Key", generateIdempotencyKey());
         if (organizationId != null && !organizationId.isEmpty()) {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build());
+        return executeWithRetry(reqBuilder.build(), true);
     }
 
     /**
@@ -552,12 +609,13 @@ public class Sendly {
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
-                .addHeader("User-Agent", "sendly-java/" + VERSION);
+                .addHeader("User-Agent", "sendly-java/" + VERSION)
+                .addHeader("Idempotency-Key", generateIdempotencyKey());
         if (organizationId != null && !organizationId.isEmpty()) {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build());
+        return executeWithRetry(reqBuilder.build(), true);
     }
 
     /**
@@ -590,6 +648,14 @@ public class Sendly {
      * Execute request with retries.
      */
     private JsonObject executeWithRetry(Request request) throws SendlyException {
+        return executeWithRetry(request, false);
+    }
+
+    /**
+     * Execute request with retries, optionally rotating an auto-generated
+     * idempotency key between attempts.
+     */
+    private JsonObject executeWithRetry(Request request, boolean autoIdempotencyKey) throws SendlyException {
         SendlyException lastException = null;
 
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
@@ -618,11 +684,51 @@ public class Sendly {
                 }
                 lastException = e;
             } catch (SendlyException e) {
+                // A 5xx means the server responded (and may have cached that
+                // response under the key), so an auto-generated key is rotated
+                // to let the retry re-execute. Timeouts and network errors
+                // leave the outcome unknown — the key is kept so the server
+                // can dedupe a request that actually went through.
+                // Caller-supplied keys are never rotated.
+                if (autoIdempotencyKey && e.getStatusCode() >= 500) {
+                    request = request.newBuilder()
+                            .header("Idempotency-Key", generateIdempotencyKey())
+                            .build();
+                }
                 lastException = e;
             }
         }
 
         throw lastException != null ? lastException : new SendlyException("Request failed after retries");
+    }
+
+    /**
+     * Generate an idempotency key for a logical request. Reused across retry
+     * attempts so the server can recognize a retry of a timed-out POST that
+     * actually reached it.
+     */
+    private static String generateIdempotencyKey() {
+        return "sendly-java-retry-" + UUID.randomUUID();
+    }
+
+    /**
+     * Validate and normalize a caller-supplied idempotency key. Empty and
+     * whitespace-only values are treated as absent (auto-generation still
+     * applies); invalid values fail fast instead of surfacing later as a
+     * retried network error.
+     */
+    private static String normalizeIdempotencyKey(String key) {
+        if (key == null) {
+            return null;
+        }
+        String trimmed = key.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (trimmed.length() > 255 || !PRINTABLE_ASCII_PATTERN.matcher(trimmed).matches()) {
+            throw new ValidationException("Idempotency key must be 1-255 printable ASCII characters");
+        }
+        return trimmed;
     }
 
     /**

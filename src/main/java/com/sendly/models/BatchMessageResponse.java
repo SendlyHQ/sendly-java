@@ -11,6 +11,20 @@ import java.util.List;
 
 /**
  * Response from a batch send operation.
+ *
+ * <p>Two API payloads deserialize into this type and they differ:</p>
+ * <ul>
+ *   <li>{@code POST /messages/batch} identifies the batch as {@code batchId} and
+ *       reports {@code sent}; it carries no {@code queued} count and no timestamps.</li>
+ *   <li>{@code GET /messages/batch/:id} (and each entry of
+ *       {@code GET /messages/batches}) identifies the batch as {@code id} and adds
+ *       {@code queued}, {@code createdAt} and {@code completedAt}.</li>
+ * </ul>
+ *
+ * <p>{@link #getBatchId()} is populated from whichever of the two identifier
+ * fields the payload carries, so it is safe to feed straight back into
+ * {@code getBatch(...)}. Counts absent from a payload read as {@code 0} and
+ * absent timestamps read as {@code null}.</p>
  */
 public class BatchMessageResponse {
     public static final String STATUS_PROCESSING = "processing";
@@ -22,6 +36,7 @@ public class BatchMessageResponse {
     private final String status;
     private final int total;
     private final int queued;
+    private final int sent;
     private final int failed;
     private final int creditsUsed;
     private final List<BatchMessageResult> messages;
@@ -32,14 +47,16 @@ public class BatchMessageResponse {
      * Create a BatchMessageResponse from a JSON object.
      */
     public BatchMessageResponse(JsonObject json) {
-        this.batchId = getStringOrNull(json, "batch_id");
+        String id = getStringOrNull(json, "batchId");
+        this.batchId = id != null ? id : getStringOrNull(json, "id");
         this.status = getStringOrNull(json, "status");
-        this.total = json.has("total") ? json.get("total").getAsInt() : 0;
-        this.queued = json.has("queued") ? json.get("queued").getAsInt() : 0;
-        this.failed = json.has("failed") ? json.get("failed").getAsInt() : 0;
-        this.creditsUsed = json.has("credits_used") ? json.get("credits_used").getAsInt() : 0;
-        this.createdAt = parseInstant(getStringOrNull(json, "created_at"));
-        this.completedAt = parseInstant(getStringOrNull(json, "completed_at"));
+        this.total = getIntOrZero(json, "total");
+        this.queued = getIntOrZero(json, "queued");
+        this.sent = getIntOrZero(json, "sent");
+        this.failed = getIntOrZero(json, "failed");
+        this.creditsUsed = getIntOrZero(json, "creditsUsed");
+        this.createdAt = parseInstant(getStringOrNull(json, "createdAt"));
+        this.completedAt = parseInstant(getStringOrNull(json, "completedAt"));
 
         this.messages = new ArrayList<>();
         if (json.has("messages") && json.get("messages").isJsonArray()) {
@@ -54,6 +71,10 @@ public class BatchMessageResponse {
         return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsString() : null;
     }
 
+    private int getIntOrZero(JsonObject json, String key) {
+        return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsInt() : 0;
+    }
+
     private Instant parseInstant(String value) {
         if (value == null) return null;
         try {
@@ -65,6 +86,10 @@ public class BatchMessageResponse {
 
     // Getters
 
+    /**
+     * The batch identifier, read from {@code batchId} on a send response and
+     * from {@code id} on a fetched or listed batch.
+     */
     public String getBatchId() {
         return batchId;
     }
@@ -77,8 +102,19 @@ public class BatchMessageResponse {
         return total;
     }
 
+    /**
+     * Messages still waiting to go out. Only a fetched or listed batch reports
+     * this; a send response has no queued count and returns {@code 0}.
+     */
     public int getQueued() {
         return queued;
+    }
+
+    /**
+     * Messages handed to the network so far.
+     */
+    public int getSent() {
+        return sent;
     }
 
     public int getFailed() {
@@ -138,6 +174,7 @@ public class BatchMessageResponse {
                 ", status='" + status + '\'' +
                 ", total=" + total +
                 ", queued=" + queued +
+                ", sent=" + sent +
                 ", failed=" + failed +
                 ", creditsUsed=" + creditsUsed +
                 '}';

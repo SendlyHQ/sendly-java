@@ -61,9 +61,12 @@ class MessagesBatchTest {
         assertEquals("batch_123", response.getBatchId());
         assertEquals("completed", response.getStatus());
         assertEquals(3, response.getTotal());
-        assertEquals(3, response.getQueued());
+        assertEquals(3, response.getSent());
         assertEquals(0, response.getFailed());
         assertEquals(3, response.getCreditsUsed());
+        // The send payload carries no queued count and no timestamps.
+        assertEquals(0, response.getQueued());
+        assertNull(response.getCreatedAt());
         assertTrue(response.isCompleted());
         assertFalse(response.isPartialFailure());
         assertFalse(response.isFailed());
@@ -98,7 +101,7 @@ class MessagesBatchTest {
         assertNotNull(response);
         assertEquals("batch_456", response.getBatchId());
         assertEquals(5, response.getTotal());
-        assertEquals(3, response.getQueued());
+        assertEquals(3, response.getSent());
         assertEquals(2, response.getFailed());
         assertEquals(5, response.getMessages().size());
         assertTrue(response.isPartialFailure());
@@ -255,17 +258,20 @@ class MessagesBatchTest {
     @Test
     void testGetBatch_happyPath() throws Exception {
         mockServer.enqueue(TestHelpers.mockSuccess(
-            TestHelpers.batchResponseJson("batch_123", 10, 10, 0)
+            TestHelpers.batchStatusJson("batch_123", 10, 10, 0)
         ));
 
         BatchMessageResponse response = client.messages().getBatch("batch_123");
 
         assertNotNull(response);
+        // The fetch payload identifies the batch as "id", not "batchId".
         assertEquals("batch_123", response.getBatchId());
         assertEquals("completed", response.getStatus());
         assertEquals(10, response.getTotal());
         assertEquals(10, response.getQueued());
         assertEquals(0, response.getFailed());
+        assertEquals(10, response.getCreditsUsed());
+        assertNotNull(response.getCreatedAt());
 
         RecordedRequest request = mockServer.takeRequest();
         assertEquals("GET", request.getMethod());
@@ -423,16 +429,19 @@ class MessagesBatchTest {
     @Test
     void testBatchResponse_statusHelpers() throws Exception {
         mockServer.enqueue(TestHelpers.mockSuccess(
-            "{\"batch_id\":\"batch_1\",\"status\":\"processing\",\"total\":5,\"queued\":0,\"failed\":0,\"credits_used\":0,\"messages\":[],\"created_at\":\"2025-01-15T10:00:00.000Z\"}"
+            "{\"id\":\"batch_1\",\"status\":\"processing\",\"total\":5,\"queued\":5,\"sent\":0,\"delivered\":0,\"failed\":0,"
+                + "\"creditsReserved\":5,\"creditsUsed\":0,\"creditsRefunded\":0,\"messages\":[],"
+                + "\"createdAt\":\"2025-01-15T10:00:00.000Z\",\"completedAt\":null}"
         ));
         BatchMessageResponse processing = client.messages().getBatch("batch_1");
+        assertEquals("batch_1", processing.getBatchId());
         assertTrue(processing.isProcessing());
         assertFalse(processing.isCompleted());
         assertFalse(processing.isPartialFailure());
         assertFalse(processing.isFailed());
 
         mockServer.enqueue(TestHelpers.mockSuccess(
-            TestHelpers.batchResponseJson("batch_2", 5, 5, 0)
+            TestHelpers.batchStatusJson("batch_2", 5, 5, 0)
         ));
         BatchMessageResponse completed = client.messages().getBatch("batch_2");
         assertTrue(completed.isCompleted());
@@ -441,7 +450,7 @@ class MessagesBatchTest {
         assertFalse(completed.isFailed());
 
         mockServer.enqueue(TestHelpers.mockSuccess(
-            "{\"batch_id\":\"batch_3\",\"status\":\"partial_failure\",\"total\":5,\"queued\":3,\"failed\":2,\"credits_used\":3,\"messages\":[],\"created_at\":\"2025-01-15T10:00:00.000Z\"}"
+            TestHelpers.batchStatusJson("batch_3", 5, 3, 2)
         ));
         BatchMessageResponse partial = client.messages().getBatch("batch_3");
         assertTrue(partial.isPartialFailure());
@@ -450,7 +459,7 @@ class MessagesBatchTest {
         assertFalse(partial.isFailed());
 
         mockServer.enqueue(TestHelpers.mockSuccess(
-            "{\"batch_id\":\"batch_4\",\"status\":\"failed\",\"total\":5,\"queued\":0,\"failed\":5,\"credits_used\":0,\"messages\":[],\"created_at\":\"2025-01-15T10:00:00.000Z\"}"
+            TestHelpers.batchStatusJson("batch_4", 5, 0, 5)
         ));
         BatchMessageResponse failed = client.messages().getBatch("batch_4");
         assertTrue(failed.isFailed());
@@ -462,7 +471,7 @@ class MessagesBatchTest {
     @Test
     void testBatchMessageResult_statusHelpers() throws Exception {
         mockServer.enqueue(TestHelpers.mockSuccess(
-            TestHelpers.batchResponseJson("batch_123", 2, 1, 1)
+            TestHelpers.batchStatusJson("batch_123", 2, 1, 1)
         ));
 
         BatchMessageResponse response = client.messages().getBatch("batch_123");
