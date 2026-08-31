@@ -282,6 +282,32 @@ for (Message message : client.messages().each(
 }
 ```
 
+## Idempotency
+
+POSTs carry an automatically generated `Idempotency-Key`, reused across the
+SDK's own timeout and network-error retries, so a retry of a request that
+already reached the API returns the original result instead of sending and
+charging again. Pass your own key via `IdempotentRequestOptions` when the
+guarantee needs to outlive the process, such as a job queue that re-runs after
+a crash or your own retry loop. Reusing a key within 24 hours returns the
+original response, so derive keys from something stable in your domain, like an
+order id. `sendBatch` sends no automatic key, because the API already
+deduplicates identical batches by their contents.
+
+```java
+import com.sendly.models.IdempotentRequestOptions;
+
+Message message = client.messages().send(
+    SendMessageRequest.builder()
+        .to("+15551234567")
+        .text("Your order has shipped!")
+        .build(),
+    new IdempotentRequestOptions("order-4821-shipped")
+);
+```
+
+Full details: https://sendly.live/docs/idempotency
+
 ## Numbers
 
 Discover, buy, and manage the phone numbers you own.
