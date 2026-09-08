@@ -160,6 +160,7 @@ public class Webhooks {
             event.id = raw.get("id").getAsString();
             event.type = raw.get("type").getAsString();
             event.data = data;
+            event.rawObject = msgObj;
             event.apiVersion = getStringOr(raw, "api_version", "2024-01");
             event.livemode = raw.has("livemode") && raw.get("livemode").getAsBoolean();
 
@@ -330,6 +331,7 @@ public class Webhooks {
         private String id;
         private String type;
         private WebhookMessageData data;
+        private transient JsonObject rawObject;
         private transient JsonElement created;
         @SerializedName("api_version")
         private String apiVersion;
@@ -337,7 +339,32 @@ public class Webhooks {
 
         public String getId() { return id; }
         public String getType() { return type; }
+        /**
+         * The message view of {@code data.object}. Only meaningful for
+         * {@code message.*} events: lifecycle events ({@code rcs_*},
+         * {@code whatsapp_*}, {@code call.*}, {@code brand.*},
+         * {@code campaign.*}, {@code assignment.*}, {@code number.*},
+         * {@code port*}) carry a different object entirely and leave every
+         * field here at its default. Use {@link #getRawObject()} or
+         * {@link #objectAs(Class)} for those.
+         */
         public WebhookMessageData getData() { return data; }
+
+        /** {@code data.object} exactly as it arrived, for every event type. */
+        public JsonObject getRawObject() { return rawObject; }
+
+        /**
+         * Deserializes {@code data.object} into {@code type}. Use it for
+         * lifecycle events, whose payload is not message-shaped.
+         *
+         * @throws IllegalStateException if the event carries no data.object
+         */
+        public <T> T objectAs(Class<T> type) {
+            if (rawObject == null) {
+                throw new IllegalStateException("This event carries no data.object.");
+            }
+            return new Gson().fromJson(rawObject, type);
+        }
         public JsonElement getCreated() { return created; }
         /** @deprecated Use {@link #getCreated()} instead */
         public String getCreatedAt() {
