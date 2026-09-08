@@ -5,6 +5,12 @@ package com.sendly.models;
  * subscribing so you catch typos at compile time.
  */
 public enum WebhookEventType {
+    /**
+     * @deprecated The API has never emitted this and rejects it when you
+     *     subscribe. It will be removed in the next major version.
+     */
+    @Deprecated
+    MESSAGE_QUEUED("message.queued"),
     MESSAGE_SENT("message.sent"),
     MESSAGE_DELIVERED("message.delivered"),
     MESSAGE_READ("message.read"),
