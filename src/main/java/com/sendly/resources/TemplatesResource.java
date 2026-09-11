@@ -34,7 +34,7 @@ public class TemplatesResource {
      * Get a template by ID.
      */
     public Template get(String templateId) throws SendlyException {
-        return client.request("GET", "/templates/" + templateId, null, Template.class);
+        return client.request("GET", "/templates/" + PathParams.encode(templateId), null, Template.class);
     }
 
     /**
@@ -54,21 +54,21 @@ public class TemplatesResource {
         Map<String, Object> body = new HashMap<>();
         if (name != null) body.put("name", name);
         if (text != null) body.put("text", text);
-        return client.request("PATCH", "/templates/" + templateId, body, Template.class);
+        return client.request("PATCH", "/templates/" + PathParams.encode(templateId), body, Template.class);
     }
 
     /**
      * Publish a draft template.
      */
     public Template publish(String templateId) throws SendlyException {
-        return client.request("POST", "/templates/" + templateId + "/publish", null, Template.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/publish", null, Template.class);
     }
 
     /**
      * Delete a template.
      */
     public void delete(String templateId) throws SendlyException {
-        client.request("DELETE", "/templates/" + templateId, null, Void.class);
+        client.request("DELETE", "/templates/" + PathParams.encode(templateId), null, Void.class);
     }
 
     /**
@@ -79,14 +79,14 @@ public class TemplatesResource {
         if (variables != null) {
             body.put("variables", variables);
         }
-        return client.request("POST", "/templates/" + templateId + "/preview", body, TemplatePreview.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/preview", body, TemplatePreview.class);
     }
 
     /**
      * Clone a template.
      */
     public Template clone(String templateId) throws SendlyException {
-        return client.request("POST", "/templates/" + templateId + "/clone", null, Template.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/clone", null, Template.class);
     }
 
     /**
@@ -97,7 +97,7 @@ public class TemplatesResource {
         if (name != null) {
             body.put("name", name);
         }
-        return client.request("POST", "/templates/" + templateId + "/clone", body, Template.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/clone", body, Template.class);
     }
 
     /**

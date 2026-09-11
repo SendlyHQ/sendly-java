@@ -51,7 +51,7 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.get("/campaigns/" + id, null);
+        JsonObject response = client.get("/campaigns/" + PathParams.encode(id), null);
         return new Campaign(response);
     }
 
@@ -59,7 +59,7 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.patch("/campaigns/" + id, request);
+        JsonObject response = client.patch("/campaigns/" + PathParams.encode(id), request);
         return new Campaign(response);
     }
 
@@ -67,14 +67,14 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        client.delete("/campaigns/" + id);
+        client.delete("/campaigns/" + PathParams.encode(id));
     }
 
     public CampaignPreview preview(String id) throws SendlyException {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.get("/campaigns/" + id + "/preview", null);
+        JsonObject response = client.get("/campaigns/" + PathParams.encode(id) + "/preview", null);
         return new CampaignPreview(response);
     }
 
@@ -82,7 +82,7 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.post("/campaigns/" + id + "/send", new JsonObject());
+        JsonObject response = client.post("/campaigns/" + PathParams.encode(id) + "/send", new JsonObject());
         return new Campaign(response);
     }
 
@@ -93,7 +93,7 @@ public class CampaignsResource {
         if (request.getScheduledAt() == null || request.getScheduledAt().isEmpty()) {
             throw new ValidationException("Scheduled time is required");
         }
-        JsonObject response = client.post("/campaigns/" + id + "/schedule", request);
+        JsonObject response = client.post("/campaigns/" + PathParams.encode(id) + "/schedule", request);
         return new Campaign(response);
     }
 
@@ -101,7 +101,7 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.post("/campaigns/" + id + "/cancel", new JsonObject());
+        JsonObject response = client.post("/campaigns/" + PathParams.encode(id) + "/cancel", new JsonObject());
         return new Campaign(response);
     }
 
@@ -109,7 +109,7 @@ public class CampaignsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
-        JsonObject response = client.post("/campaigns/" + id + "/clone", new JsonObject());
+        JsonObject response = client.post("/campaigns/" + PathParams.encode(id) + "/clone", new JsonObject());
         return new Campaign(response);
     }
 }

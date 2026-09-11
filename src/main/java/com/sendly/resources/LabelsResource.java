@@ -71,6 +71,6 @@ public class LabelsResource {
             throw new ValidationException("Label ID is required");
         }
 
-        client.request("DELETE", "/labels/" + id, null, Void.class);
+        client.request("DELETE", "/labels/" + PathParams.encode(id), null, Void.class);
     }
 }

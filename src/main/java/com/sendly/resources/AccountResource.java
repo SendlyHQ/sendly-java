@@ -150,7 +150,7 @@ public class AccountResource {
             throw new ValidationException("API key ID is required");
         }
 
-        JsonObject response = client.get("/account/keys/" + keyId, null);
+        JsonObject response = client.get("/account/keys/" + PathParams.encode(keyId), null);
         JsonObject data = response.has("key") ?
             response.getAsJsonObject("key") :
             response.has("data") ? response.getAsJsonObject("data") : response;
@@ -168,7 +168,7 @@ public class AccountResource {
         if (keyId == null || keyId.isEmpty()) {
             throw new ValidationException("API key ID is required");
         }
-        return client.get("/account/keys/" + keyId + "/usage", null);
+        return client.get("/account/keys/" + PathParams.encode(keyId) + "/usage", null);
     }
 
     /**
@@ -241,7 +241,7 @@ public class AccountResource {
             body.addProperty("reason", reason);
         }
 
-        JsonObject response = client.patch("/account/keys/" + keyId + "/revoke", body);
+        JsonObject response = client.patch("/account/keys/" + PathParams.encode(keyId) + "/revoke", body);
         JsonObject data = response.has("key") ?
             response.getAsJsonObject("key") :
             response.has("data") ? response.getAsJsonObject("data") : response;
@@ -288,6 +288,6 @@ public class AccountResource {
             body.addProperty("gracePeriodHours", gracePeriodHours);
         }
 
-        return client.post("/account/keys/" + keyId + "/rotate", body);
+        return client.post("/account/keys/" + PathParams.encode(keyId) + "/rotate", body);
     }
 }

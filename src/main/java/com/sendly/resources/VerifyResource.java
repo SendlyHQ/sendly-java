@@ -43,14 +43,14 @@ public class VerifyResource {
     public CheckVerificationResponse check(String verificationId, String code) throws SendlyException {
         Map<String, Object> body = new HashMap<>();
         body.put("code", code);
-        return client.request("POST", "/verify/" + verificationId + "/check", body, CheckVerificationResponse.class);
+        return client.request("POST", "/verify/" + PathParams.encode(verificationId) + "/check", body, CheckVerificationResponse.class);
     }
 
     /**
      * Get a verification by ID.
      */
     public Verification get(String verificationId) throws SendlyException {
-        return client.request("GET", "/verify/" + verificationId, null, Verification.class);
+        return client.request("GET", "/verify/" + PathParams.encode(verificationId), null, Verification.class);
     }
 
     /**
@@ -75,6 +75,6 @@ public class VerifyResource {
      * Resend an OTP verification code.
      */
     public SendVerificationResponse resend(String verificationId) throws SendlyException {
-        return client.request("POST", "/verify/" + verificationId + "/resend", null, SendVerificationResponse.class);
+        return client.request("POST", "/verify/" + PathParams.encode(verificationId) + "/resend", null, SendVerificationResponse.class);
     }
 }

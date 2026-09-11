@@ -48,7 +48,7 @@ public class ContactsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact ID is required");
         }
-        JsonObject response = client.get("/contacts/" + id, null);
+        JsonObject response = client.get("/contacts/" + PathParams.encode(id), null);
         return new Contact(response);
     }
 
@@ -64,7 +64,7 @@ public class ContactsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact ID is required");
         }
-        JsonObject response = client.patch("/contacts/" + id, request);
+        JsonObject response = client.patch("/contacts/" + PathParams.encode(id), request);
         return new Contact(response);
     }
 
@@ -72,7 +72,7 @@ public class ContactsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact ID is required");
         }
-        client.delete("/contacts/" + id);
+        client.delete("/contacts/" + PathParams.encode(id));
     }
 
     /**
@@ -85,7 +85,7 @@ public class ContactsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact ID is required");
         }
-        JsonObject response = client.post("/contacts/" + id + "/mark-valid", new JsonObject());
+        JsonObject response = client.post("/contacts/" + PathParams.encode(id) + "/mark-valid", new JsonObject());
         return new Contact(response);
     }
 

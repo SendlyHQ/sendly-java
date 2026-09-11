@@ -102,7 +102,7 @@ public class DraftsResource {
             throw new ValidationException("Draft ID is required");
         }
 
-        return client.request("GET", "/drafts/" + id, null, Draft.class);
+        return client.request("GET", "/drafts/" + PathParams.encode(id), null, Draft.class);
     }
 
     /**
@@ -137,7 +137,7 @@ public class DraftsResource {
         if (mediaUrls != null) body.put("mediaUrls", mediaUrls);
         if (metadata != null) body.put("metadata", metadata);
 
-        return client.request("PATCH", "/drafts/" + id, body, Draft.class);
+        return client.request("PATCH", "/drafts/" + PathParams.encode(id), body, Draft.class);
     }
 
     /**
@@ -152,7 +152,7 @@ public class DraftsResource {
             throw new ValidationException("Draft ID is required");
         }
 
-        return client.request("POST", "/drafts/" + id + "/approve", null, Draft.class);
+        return client.request("POST", "/drafts/" + PathParams.encode(id) + "/approve", null, Draft.class);
     }
 
     /**
@@ -182,7 +182,7 @@ public class DraftsResource {
         Map<String, Object> body = new HashMap<>();
         if (reason != null) body.put("reason", reason);
 
-        return client.request("POST", "/drafts/" + id + "/reject", body, Draft.class);
+        return client.request("POST", "/drafts/" + PathParams.encode(id) + "/reject", body, Draft.class);
     }
 
     private String buildQueryString(Map<String, String> params) {

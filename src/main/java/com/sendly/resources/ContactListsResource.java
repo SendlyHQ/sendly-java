@@ -28,7 +28,7 @@ public class ContactListsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact list ID is required");
         }
-        JsonObject response = client.get("/contact-lists/" + id, null);
+        JsonObject response = client.get("/contact-lists/" + PathParams.encode(id), null);
         return new ContactList(response);
     }
 
@@ -44,7 +44,7 @@ public class ContactListsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact list ID is required");
         }
-        JsonObject response = client.patch("/contact-lists/" + id, request);
+        JsonObject response = client.patch("/contact-lists/" + PathParams.encode(id), request);
         return new ContactList(response);
     }
 
@@ -52,7 +52,7 @@ public class ContactListsResource {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Contact list ID is required");
         }
-        client.delete("/contact-lists/" + id);
+        client.delete("/contact-lists/" + PathParams.encode(id));
     }
 
     public void addContacts(String listId, List<String> contactIds) throws SendlyException {
@@ -62,7 +62,7 @@ public class ContactListsResource {
         if (contactIds == null || contactIds.isEmpty()) {
             throw new ValidationException("At least one contact ID is required");
         }
-        client.post("/contact-lists/" + listId + "/contacts", new AddContactsRequest(contactIds));
+        client.post("/contact-lists/" + PathParams.encode(listId) + "/contacts", new AddContactsRequest(contactIds));
     }
 
     public void removeContact(String listId, String contactId) throws SendlyException {
@@ -72,6 +72,6 @@ public class ContactListsResource {
         if (contactId == null || contactId.isEmpty()) {
             throw new ValidationException("Contact ID is required");
         }
-        client.delete("/contact-lists/" + listId + "/contacts/" + contactId);
+        client.delete("/contact-lists/" + PathParams.encode(listId) + "/contacts/" + PathParams.encode(contactId));
     }
 }

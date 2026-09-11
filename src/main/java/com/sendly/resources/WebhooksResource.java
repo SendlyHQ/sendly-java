@@ -82,7 +82,7 @@ public class WebhooksResource {
      */
     public Webhook get(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        JsonObject response = client.get("/webhooks/" + webhookId, null);
+        JsonObject response = client.get("/webhooks/" + PathParams.encode(webhookId), null);
         return new Webhook(response);
     }
 
@@ -105,7 +105,7 @@ public class WebhooksResource {
         if (description != null) body.addProperty("description", description);
         if (isActive != null) body.addProperty("is_active", isActive);
 
-        JsonObject response = client.patch("/webhooks/" + webhookId, body);
+        JsonObject response = client.patch("/webhooks/" + PathParams.encode(webhookId), body);
         return new Webhook(response);
     }
 
@@ -114,7 +114,7 @@ public class WebhooksResource {
      */
     public void delete(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        client.delete("/webhooks/" + webhookId);
+        client.delete("/webhooks/" + PathParams.encode(webhookId));
     }
 
     /**
@@ -122,7 +122,7 @@ public class WebhooksResource {
      */
     public WebhookTestResult test(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        JsonObject response = client.post("/webhooks/" + webhookId + "/test", new JsonObject());
+        JsonObject response = client.post("/webhooks/" + PathParams.encode(webhookId) + "/test", new JsonObject());
         return new WebhookTestResult(response);
     }
 
@@ -131,7 +131,7 @@ public class WebhooksResource {
      */
     public JsonObject resetCircuit(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        return client.post("/webhooks/" + webhookId + "/reset-circuit", new JsonObject());
+        return client.post("/webhooks/" + PathParams.encode(webhookId) + "/reset-circuit", new JsonObject());
     }
 
     /**
@@ -151,7 +151,7 @@ public class WebhooksResource {
     public JsonObject redeliver(String webhookId, RedeliverOptions options) throws SendlyException {
         validateWebhookId(webhookId);
         JsonObject body = options != null ? options.toJson() : new JsonObject();
-        return client.post("/webhooks/" + webhookId + "/redeliver", body);
+        return client.post("/webhooks/" + PathParams.encode(webhookId) + "/redeliver", body);
     }
 
     public JsonObject redeliver(String webhookId) throws SendlyException {
@@ -176,7 +176,7 @@ public class WebhooksResource {
     public JsonObject backfill(String webhookId, BackfillOptions options) throws SendlyException {
         validateWebhookId(webhookId);
         JsonObject body = options != null ? options.toJson() : new JsonObject();
-        return client.post("/webhooks/" + webhookId + "/backfill", body);
+        return client.post("/webhooks/" + PathParams.encode(webhookId) + "/backfill", body);
     }
 
     public JsonObject backfill(String webhookId) throws SendlyException {
@@ -247,7 +247,7 @@ public class WebhooksResource {
      */
     public WebhookCreatedResponse rotateSecret(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        JsonObject response = client.post("/webhooks/" + webhookId + "/rotate-secret", new JsonObject());
+        JsonObject response = client.post("/webhooks/" + PathParams.encode(webhookId) + "/rotate-secret", new JsonObject());
         // The response contains webhook and newSecret
         JsonObject webhookJson = response.has("webhook") ? response.getAsJsonObject("webhook") : response;
         if (response.has("new_secret") || response.has("newSecret")) {
@@ -262,7 +262,7 @@ public class WebhooksResource {
      */
     public List<WebhookDelivery> getDeliveries(String webhookId) throws SendlyException {
         validateWebhookId(webhookId);
-        JsonObject response = client.get("/webhooks/" + webhookId + "/deliveries", null);
+        JsonObject response = client.get("/webhooks/" + PathParams.encode(webhookId) + "/deliveries", null);
         List<WebhookDelivery> deliveries = new ArrayList<>();
         if (response.has("data") && response.get("data").isJsonArray()) {
             response.getAsJsonArray("data").forEach(e -> deliveries.add(new WebhookDelivery(e.getAsJsonObject())));
@@ -278,7 +278,7 @@ public class WebhooksResource {
         if (deliveryId == null || !deliveryId.startsWith("del_")) {
             throw new ValidationException("Invalid delivery ID format");
         }
-        client.post("/webhooks/" + webhookId + "/deliveries/" + deliveryId + "/retry", new JsonObject());
+        client.post("/webhooks/" + PathParams.encode(webhookId) + "/deliveries/" + PathParams.encode(deliveryId) + "/retry", new JsonObject());
     }
 
     /**

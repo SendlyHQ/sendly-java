@@ -1,6 +1,55 @@
 # sendly-java
 
-## Unreleased
+## 4.0.0
+
+### Major Changes
+
+- Every Sendly SDK, the CLI and the MCP server now share one version. No public API was removed or changed in this package; the major aligns the fleet and carries the behaviour change below.
+
+### Security
+
+- **Path parameters are percent-encoded.** Every id you pass is now encoded before it goes into the request path. An id containing `/`, `?` or `#` used to change which endpoint the request reached: an id of `../../account/keys` left its collection and hit another endpoint carrying your API key. Ordinary ids are sent byte-for-byte as before.
+
+## 3.40.0
+
+### Minor Changes
+
+- **Lifecycle webhook payloads are reachable.** `Webhooks.parseEvent(...)` built a `WebhookMessageData` out of every `data.object`, field by field. That is right for `message.*` and wrong for every lifecycle event — `rcs_brand.*`, `rcs_agent.*`, `whatsapp_account.*`, `whatsapp_template.*`, `call.*`, `brand.*`, `campaign.*`, `assignment.*`, `number.*`, `port.*`, `port_out.*`, `contact.*` — which carry a different object entirely. The keys it looks for are absent, so the object came back with every field at its default and **no error was raised**: an integration looked healthy while dropping `agent_id`, `stage` and `name` on the floor. `WebhookEvent` gains two accessors that reach the payload itself:
+  - `getRawObject()` returns `data.object` exactly as it arrived, as a Gson `JsonObject`, for every event type. (If a payload carries no `data.object`, it falls back to `data` itself.)
+  - `objectAs(Class<T>)` deserializes that object into a type of your choosing.
+
+  ```java
+  static class RcsAgentEvent {
+      @SerializedName("agent_id") String agentId;
+      String stage;
+  }
+
+  WebhookEvent event = Webhooks.parseEvent(payload, signature, secret, timestamp);
+  if ("rcs_agent.live".equals(event.getType())) {
+      RcsAgentEvent agent = event.objectAs(RcsAgentEvent.class);
+      System.out.println(agent.agentId + " reached " + agent.stage);
+  }
+  ```
+
+  `objectAs` uses a plain `Gson` with no field-naming policy, so snake_case keys need `@SerializedName`. It throws `IllegalStateException` if the event carries no object at all. `getData()` is unchanged and still the right accessor for `message.*`.
+
+- **Every webhook event type the API emits is now declared in `WebhookEventType`.** Twenty-one constants were missing, so there was no typed way to subscribe to RCS, WhatsApp or voice: `MESSAGE_READ`, `CONVERSATION_CREATED` / `CONVERSATION_UPDATED`, `DRAFT_CREATED` / `DRAFT_APPROVED` / `DRAFT_REJECTED`, `RCS_BRAND_VERIFIED` / `RCS_BRAND_FAILED`, `RCS_AGENT_TESTING` / `RCS_AGENT_LIVE` / `RCS_AGENT_REJECTED` / `RCS_AGENT_ACTION_REQUIRED`, `NUMBER_RELEASED`, `WHATSAPP_ACCOUNT_CONNECTED` / `WHATSAPP_ACCOUNT_FAILED`, `WHATSAPP_TEMPLATE_APPROVED` / `WHATSAPP_TEMPLATE_REJECTED` / `WHATSAPP_TEMPLATE_PAUSED`, `CALL_STARTED` / `CALL_COMPLETED` / `CALL_RECORDING_READY`. A parity check runs in CI against the server's own list, so this cannot drift again.
+
+- **The README documents webhook event handling for the first time**, including which events `getData()` applies to and how to read a lifecycle payload.
+
+### Deprecated
+
+- `WebhookEventType.MESSAGE_QUEUED`. The API has never emitted `message.queued` and rejects it with a 400 when you subscribe, so drop it from any webhook's event list now. It is kept for one more cycle and will be removed in the next major. The fleet also deprecates `message.undelivered` for the same reason; the Java enum has never carried a constant for it, so there is nothing to deprecate here, but the string is rejected the same way if you pass it to `webhooks().create(...)`.
+
+### Upgrade notes
+
+Nothing was removed or renamed and no signature changed, so existing code compiles. Two things are worth checking a handler against.
+
+- **`getData()` still decodes a lifecycle object as a message.** Unlike the SDKs that took a major in this release, Java leaves the message view populated rather than emptying it, because emptying it would be a breaking change and this is a minor. So the old hazard survives until then, and it is worth being precise about: on `contact.auto_flagged` the payload is the **contact**, so `getData().getId()` returns a contact id under a message id's meaning, and a handler keyed on it acts on the wrong record. The message that triggered the flag is the payload's own `message_id` field (`event.getRawObject().get("message_id").getAsString()`). The same applies wherever a lifecycle payload reuses a message field name: `number.activated` carries the number's `id` and `status`, `call.completed` its own `id`, `status`, `from` and `to`. Move every non-`message.*` handler onto `getRawObject()` or `objectAs(...)`.
+
+- **A build with `-Xlint:deprecation -Werror` will now fail on `WebhookEventType.MESSAGE_QUEUED`.** That is the intended signal, but it is a compile break in a strict build rather than a warning, so it is called out here rather than left to be discovered.
+
+## 3.39.0
 
 ### Minor Changes
 

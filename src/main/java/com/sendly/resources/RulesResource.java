@@ -86,7 +86,7 @@ public class RulesResource {
             throw new ValidationException("Rule ID is required");
         }
 
-        return client.request("PATCH", "/rules/" + id, data, Rule.class);
+        return client.request("PATCH", "/rules/" + PathParams.encode(id), data, Rule.class);
     }
 
     /**
@@ -100,6 +100,6 @@ public class RulesResource {
             throw new ValidationException("Rule ID is required");
         }
 
-        client.request("DELETE", "/rules/" + id, null, Void.class);
+        client.request("DELETE", "/rules/" + PathParams.encode(id), null, Void.class);
     }
 }

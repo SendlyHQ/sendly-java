@@ -24,20 +24,20 @@ Official Java SDK for the Sendly SMS API.
 <dependency>
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>3.36.0</version>
+    <version>4.0.0</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'live.sendly:sendly-java:3.36.0'
+implementation 'live.sendly:sendly-java:4.0.0'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("live.sendly:sendly-java:3.36.0")
+implementation("live.sendly:sendly-java:4.0.0")
 ```
 
 ## Quick Start
@@ -677,6 +677,110 @@ for (String eventType : eventTypes) {
     System.out.println("Event: " + eventType);
 }
 ```
+
+### Receiving events
+
+`Webhooks.parseEvent(...)` verifies the signature and returns a
+`Webhooks.WebhookEvent`. There are two ways to read the payload off it:
+
+- `event.getData()` is the **message view** of `data.object`, and is only
+  meaningful for `message.*` events.
+- `event.getRawObject()` is `data.object` exactly as it arrived, for every
+  event type, and `event.objectAs(SomeClass.class)` deserializes it with Gson.
+
+Lifecycle events — `rcs_brand.*`, `rcs_agent.*`, `whatsapp_account.*`,
+`whatsapp_template.*`, `call.*`, `brand.*`, `campaign.*`, `assignment.*`,
+`number.*`, `port.*`, `port_out.*`, `contact.*` — carry a different object
+entirely, so read those through `getRawObject()` or `objectAs(...)`. Reaching
+for them through `getData()` gives you a message whose every field sits at its
+default (`null`, `0`, `""`), and nothing raises an error to tell you so.
+
+Subscribe with the `WebhookEventType` constants (in `com.sendly.models`) to
+keep the wire strings honest — `create(...)` takes them as strings:
+
+```java
+client.webhooks().create(
+    "https://example.com/webhooks/sendly",
+    Arrays.asList(
+        WebhookEventType.MESSAGE_DELIVERED.getValue(),
+        WebhookEventType.RCS_AGENT_LIVE.getValue(),
+        WebhookEventType.CALL_COMPLETED.getValue()
+    )
+);
+```
+
+Then handle both shapes in one endpoint:
+
+```java
+import com.google.gson.JsonObject;
+import com.google.gson.annotations.SerializedName;
+import com.sendly.webhooks.Webhooks;
+import com.sendly.webhooks.Webhooks.WebhookEvent;
+import com.sendly.webhooks.Webhooks.WebhookSignatureException;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+public class SendlyWebhookController {
+
+    // data.object for rcs_agent.live:
+    // {"agent_id":"rag_abc123","name":"Acme Support","stage":"live",
+    //  "organization_id":"org_9f2c"}
+    // objectAs uses a plain Gson, which matches field names literally, so
+    // snake_case keys need @SerializedName.
+    static class RcsAgentEvent {
+        @SerializedName("agent_id") String agentId;
+        String name;
+        String stage;
+    }
+
+    @PostMapping("/webhooks/sendly")
+    public ResponseEntity<String> handleWebhook(
+        @RequestBody String payload,
+        @RequestHeader("X-Sendly-Signature") String signature,
+        @RequestHeader(value = "X-Sendly-Timestamp", required = false) String timestamp
+    ) {
+        WebhookEvent event;
+        try {
+            event = Webhooks.parseEvent(
+                payload, signature, System.getenv("SENDLY_WEBHOOK_SECRET"), timestamp);
+        } catch (WebhookSignatureException e) {
+            return ResponseEntity.status(401).body("Invalid signature");
+        }
+
+        switch (event.getType()) {
+            case "message.delivered":
+                // A message event: the message view is the one to read.
+                System.out.println("Delivered: " + event.getData().getId());
+                break;
+
+            case "rcs_agent.live":
+                // A lifecycle event: decode data.object into your own type.
+                RcsAgentEvent agent = event.objectAs(RcsAgentEvent.class);
+                System.out.println("Agent " + agent.agentId + " reached " + agent.stage);
+                break;
+
+            default:
+                // Or read data.object straight, without declaring a type.
+                JsonObject object = event.getRawObject();
+                System.out.println(event.getType() + " -> " + object);
+        }
+
+        return ResponseEntity.ok("OK");
+    }
+}
+```
+
+> **Note**: on `contact.auto_flagged` the payload is the **contact**, so its
+> `id` is a contact id and `event.getData().getId()` hands it back as though it
+> were a message id. The message that triggered the flag is the payload's own
+> `message_id`: read it with
+> `event.getRawObject().get("message_id").getAsString()`.
+
+`Webhooks.verifySignature(payload, signature, secret, timestamp)` is available
+on its own if you parse the body yourself, and
+`Webhooks.generateSignature(payload, secret, timestamp)` signs a payload so you
+can exercise your endpoint in tests.
 
 ## Account & Credits
 

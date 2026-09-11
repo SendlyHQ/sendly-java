@@ -307,7 +307,7 @@ public class Messages {
             throw new ValidationException("Message ID is required");
         }
 
-        JsonObject response = client.get("/messages/" + id, null);
+        JsonObject response = client.get("/messages/" + PathParams.encode(id), null);
         JsonObject data = response.has("data") ?
                 response.getAsJsonObject("data") :
                 response.has("message") ? response.getAsJsonObject("message") : response;
@@ -419,7 +419,7 @@ public class Messages {
         }
 
         String encodedId = encodePathParam(id);
-        JsonObject response = client.get("/messages/scheduled/" + encodedId, null);
+        JsonObject response = client.get("/messages/scheduled/" + PathParams.encode(encodedId), null);
         JsonObject data = response.has("data") ?
                 response.getAsJsonObject("data") : response;
 
@@ -439,7 +439,7 @@ public class Messages {
         }
 
         String encodedId = encodePathParam(id);
-        JsonObject response = client.delete("/messages/scheduled/" + encodedId);
+        JsonObject response = client.delete("/messages/scheduled/" + PathParams.encode(encodedId));
         return new CancelScheduledMessageResponse(response);
     }
 
@@ -499,7 +499,7 @@ public class Messages {
         }
 
         String encodedId = encodePathParam(batchId);
-        JsonObject response = client.get("/messages/batch/" + encodedId, null);
+        JsonObject response = client.get("/messages/batch/" + PathParams.encode(encodedId), null);
         return new BatchMessageResponse(response);
     }
 

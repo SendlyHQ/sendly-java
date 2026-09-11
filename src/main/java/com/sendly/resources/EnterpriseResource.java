@@ -147,12 +147,12 @@ public class EnterpriseResource {
 
         public JsonObject get(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId, null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId), null);
         }
 
         public void delete(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            client.delete("/enterprise/workspaces/" + workspaceId);
+            client.delete("/enterprise/workspaces/" + PathParams.encode(workspaceId));
         }
 
         /**
@@ -176,7 +176,7 @@ public class EnterpriseResource {
             if (data == null || data.isEmpty()) {
                 throw new ValidationException("Verification data is required");
             }
-            return client.post("/enterprise/workspaces/" + workspaceId + "/verification/submit", data);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification/submit", data);
         }
 
         /**
@@ -198,7 +198,7 @@ public class EnterpriseResource {
             if (data == null || data.size() == 0) {
                 throw new ValidationException("Verification data is required");
             }
-            return client.post("/enterprise/workspaces/" + workspaceId + "/verification/submit", data);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification/submit", data);
         }
 
         public JsonObject inheritVerification(String workspaceId, String sourceWorkspaceId) throws SendlyException {
@@ -210,12 +210,12 @@ public class EnterpriseResource {
             JsonObject body = new JsonObject();
             body.addProperty("source_workspace_id", sourceWorkspaceId);
 
-            return client.post("/enterprise/workspaces/" + workspaceId + "/verification/inherit", body);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification/inherit", body);
         }
 
         public JsonObject getVerification(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/verification", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification", null);
         }
 
         public JsonObject transferCredits(String workspaceId, String sourceWorkspaceId, int amount) throws SendlyException {
@@ -231,12 +231,12 @@ public class EnterpriseResource {
             body.addProperty("source_workspace_id", sourceWorkspaceId);
             body.addProperty("amount", amount);
 
-            return client.post("/enterprise/workspaces/" + workspaceId + "/transfer-credits", body);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/transfer-credits", body);
         }
 
         public JsonObject getCredits(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/credits", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/credits", null);
         }
 
         public JsonObject createKey(String workspaceId) throws SendlyException {
@@ -254,12 +254,12 @@ public class EnterpriseResource {
                 body.addProperty("type", type);
             }
 
-            return client.post("/enterprise/workspaces/" + workspaceId + "/keys", body);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/keys", body);
         }
 
         public List<JsonObject> listKeys(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            JsonObject response = client.get("/enterprise/workspaces/" + workspaceId + "/keys", null);
+            JsonObject response = client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/keys", null);
 
             List<JsonObject> keys = new ArrayList<>();
             JsonArray array = null;
@@ -284,12 +284,12 @@ public class EnterpriseResource {
             if (keyId == null || keyId.isEmpty()) {
                 throw new ValidationException("Key ID is required");
             }
-            client.delete("/enterprise/workspaces/" + workspaceId + "/keys/" + keyId);
+            client.delete("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/keys/" + PathParams.encode(keyId));
         }
 
         public JsonObject listOptInPages(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/opt-in-pages", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/opt-in-pages", null);
         }
 
         public JsonObject createOptInPage(String workspaceId, JsonObject options) throws SendlyException {
@@ -300,7 +300,7 @@ public class EnterpriseResource {
             if (!options.has("businessName") || options.get("businessName").getAsString().trim().isEmpty()) {
                 throw new ValidationException("businessName is required");
             }
-            return client.post("/enterprise/workspaces/" + workspaceId + "/opt-in-pages", options);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/opt-in-pages", options);
         }
 
         public JsonObject updateOptInPage(String workspaceId, String pageId, JsonObject options) throws SendlyException {
@@ -311,7 +311,7 @@ public class EnterpriseResource {
             if (options == null) {
                 throw new ValidationException("Update options are required");
             }
-            return client.patch("/enterprise/workspaces/" + workspaceId + "/opt-in-pages/" + pageId, options);
+            return client.patch("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/opt-in-pages/" + PathParams.encode(pageId), options);
         }
 
         public void deleteOptInPage(String workspaceId, String pageId) throws SendlyException {
@@ -319,7 +319,7 @@ public class EnterpriseResource {
             if (pageId == null || pageId.isEmpty()) {
                 throw new ValidationException("Page ID is required");
             }
-            client.delete("/enterprise/workspaces/" + workspaceId + "/opt-in-pages/" + pageId);
+            client.delete("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/opt-in-pages/" + PathParams.encode(pageId));
         }
 
         public JsonObject setWebhook(String workspaceId, JsonObject options) throws SendlyException {
@@ -330,12 +330,12 @@ public class EnterpriseResource {
             if (!options.has("url") || options.get("url").getAsString().trim().isEmpty()) {
                 throw new ValidationException("Webhook URL is required");
             }
-            return client.put("/enterprise/workspaces/" + workspaceId + "/webhooks", options);
+            return client.put("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks", options);
         }
 
         public JsonObject listWebhooks(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/webhooks", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks", null);
         }
 
         public void deleteWebhooks(String workspaceId) throws SendlyException {
@@ -344,7 +344,7 @@ public class EnterpriseResource {
 
         public void deleteWebhooks(String workspaceId, String webhookId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            String path = "/enterprise/workspaces/" + workspaceId + "/webhooks";
+            String path = "/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks";
             if (webhookId != null && !webhookId.isEmpty()) {
                 path += "?webhookId=" + webhookId;
             }
@@ -353,7 +353,7 @@ public class EnterpriseResource {
 
         public JsonObject testWebhook(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.post("/enterprise/workspaces/" + workspaceId + "/webhooks/test", new JsonObject());
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks/test", new JsonObject());
         }
 
         public JsonObject suspend(String workspaceId) throws SendlyException {
@@ -366,12 +366,12 @@ public class EnterpriseResource {
             if (reason != null && !reason.isEmpty()) {
                 body.addProperty("reason", reason);
             }
-            return client.post("/enterprise/workspaces/" + workspaceId + "/suspend", body);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/suspend", body);
         }
 
         public JsonObject resume(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.post("/enterprise/workspaces/" + workspaceId + "/resume", new JsonObject());
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/resume", new JsonObject());
         }
 
         public JsonObject provisionBulk(JsonArray workspaces) throws SendlyException {
@@ -400,7 +400,7 @@ public class EnterpriseResource {
             JsonObject body = new JsonObject();
             body.addProperty("domain", domain);
 
-            return client.put("/enterprise/workspaces/" + workspaceId + "/pages/" + pageId + "/domain", body);
+            return client.put("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/pages/" + PathParams.encode(pageId) + "/domain", body);
         }
 
         public JsonObject sendInvitation(String workspaceId, String email, String role) throws SendlyException {
@@ -416,12 +416,12 @@ public class EnterpriseResource {
             body.addProperty("email", email);
             body.addProperty("role", role);
 
-            return client.post("/enterprise/workspaces/" + workspaceId + "/invitations", body);
+            return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/invitations", body);
         }
 
         public JsonObject listInvitations(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/invitations", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/invitations", null);
         }
 
         public void cancelInvitation(String workspaceId, String inviteId) throws SendlyException {
@@ -429,12 +429,12 @@ public class EnterpriseResource {
             if (inviteId == null || inviteId.isEmpty()) {
                 throw new ValidationException("Invitation ID is required");
             }
-            client.delete("/enterprise/workspaces/" + workspaceId + "/invitations/" + inviteId);
+            client.delete("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/invitations/" + PathParams.encode(inviteId));
         }
 
         public JsonObject getQuota(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
-            return client.get("/enterprise/workspaces/" + workspaceId + "/quota", null);
+            return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/quota", null);
         }
 
         public JsonObject setQuota(String workspaceId, Integer monthlyMessageQuota) throws SendlyException {
@@ -446,7 +446,7 @@ public class EnterpriseResource {
             JsonObject body = new JsonObject();
             body.addProperty("monthlyMessageQuota", monthlyMessageQuota);
 
-            return client.put("/enterprise/workspaces/" + workspaceId + "/quota", body);
+            return client.put("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/quota", body);
         }
 
         private void validateWorkspaceId(String workspaceId) {

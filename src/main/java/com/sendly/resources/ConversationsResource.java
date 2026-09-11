@@ -91,7 +91,7 @@ public class ConversationsResource {
             }
         }
 
-        JsonObject response = client.get("/conversations/" + id, params.isEmpty() ? null : params);
+        JsonObject response = client.get("/conversations/" + PathParams.encode(id), params.isEmpty() ? null : params);
         return new Conversation(response);
     }
 
@@ -134,7 +134,7 @@ public class ConversationsResource {
             body.put("metadata", metadata);
         }
 
-        JsonObject response = client.post("/conversations/" + id + "/messages", body);
+        JsonObject response = client.post("/conversations/" + PathParams.encode(id) + "/messages", body);
         return new Message(response);
     }
 
@@ -160,7 +160,7 @@ public class ConversationsResource {
             body.put("tags", tags);
         }
 
-        JsonObject response = client.patch("/conversations/" + id, body);
+        JsonObject response = client.patch("/conversations/" + PathParams.encode(id), body);
         return new Conversation(response);
     }
 
@@ -176,7 +176,7 @@ public class ConversationsResource {
             throw new ValidationException("Conversation ID is required");
         }
 
-        JsonObject response = client.post("/conversations/" + id + "/close", new HashMap<>());
+        JsonObject response = client.post("/conversations/" + PathParams.encode(id) + "/close", new HashMap<>());
         return new Conversation(response);
     }
 
@@ -192,7 +192,7 @@ public class ConversationsResource {
             throw new ValidationException("Conversation ID is required");
         }
 
-        JsonObject response = client.post("/conversations/" + id + "/reopen", new HashMap<>());
+        JsonObject response = client.post("/conversations/" + PathParams.encode(id) + "/reopen", new HashMap<>());
         return new Conversation(response);
     }
 
@@ -208,7 +208,7 @@ public class ConversationsResource {
             throw new ValidationException("Conversation ID is required");
         }
 
-        JsonObject response = client.post("/conversations/" + id + "/mark-read", new HashMap<>());
+        JsonObject response = client.post("/conversations/" + PathParams.encode(id) + "/mark-read", new HashMap<>());
         return new Conversation(response);
     }
 
@@ -231,7 +231,7 @@ public class ConversationsResource {
         Map<String, Object> body = new HashMap<>();
         body.put("labelIds", labelIds);
 
-        return client.request("POST", "/conversations/" + conversationId + "/labels", body, LabelListResponse.class);
+        return client.request("POST", "/conversations/" + PathParams.encode(conversationId) + "/labels", body, LabelListResponse.class);
     }
 
     /**
@@ -249,7 +249,7 @@ public class ConversationsResource {
             throw new ValidationException("Label ID is required");
         }
 
-        client.request("DELETE", "/conversations/" + conversationId + "/labels/" + labelId, null, Void.class);
+        client.request("DELETE", "/conversations/" + PathParams.encode(conversationId) + "/labels/" + PathParams.encode(labelId), null, Void.class);
     }
 
     /**
@@ -281,7 +281,7 @@ public class ConversationsResource {
             params.put("max_messages", String.valueOf(maxMessages));
         }
 
-        return client.get("/conversations/" + id + "/context", params.isEmpty() ? null : params);
+        return client.get("/conversations/" + PathParams.encode(id) + "/context", params.isEmpty() ? null : params);
     }
 
     /**
@@ -300,6 +300,6 @@ public class ConversationsResource {
             throw new ValidationException("Conversation ID is required");
         }
 
-        return client.post("/conversations/" + id + "/suggest-replies", new HashMap<>());
+        return client.post("/conversations/" + PathParams.encode(id) + "/suggest-replies", new HashMap<>());
     }
 }
