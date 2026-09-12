@@ -65,7 +65,11 @@ public enum WebhookEventType {
     WHATSAPP_TEMPLATE_PAUSED("whatsapp_template.paused"),
     CALL_STARTED("call.started"),
     CALL_COMPLETED("call.completed"),
-    CALL_RECORDING_READY("call.recording.ready");
+    CALL_RECORDING_READY("call.recording.ready"),
+    SHORT_CODE_ACTION_REQUIRED("short_code.action_required"),
+    SHORT_CODE_REJECTED("short_code.rejected"),
+    SHORT_CODE_FILED("short_code.filed"),
+    SHORT_CODE_LIVE("short_code.live");
 
     private final String value;
 
