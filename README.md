@@ -636,6 +636,90 @@ client.links().disable(link.getCode());
 client.links().enable(link.getCode());
 ```
 
+## Voice Calls
+
+Place phone calls that one of your AI agents handles, follow them while they
+run, end them, and download recordings. Numbers are set up in the dashboard:
+switch voice on for a number under Calls, choose how it answers, and register
+its emergency address. `numbers().list()` reports `isVoiceEnabled()` and
+`getVoiceMode()` so you can pick a `from` number.
+
+> **Note**: Calls are prepaid from your balance per started minute. An
+> agent-handled outbound call costs 10 credits a minute (2 for the call, 8 for
+> the agent); an unanswered call costs nothing. Destinations are US and Canada.
+> Voice is being enabled workspace by workspace; until it is on for yours every
+> method answers 404 `voice_not_enabled`. Reads need the `calls:read` scope,
+> writes need `calls:write` and a live API key.
+
+```java
+// Place a call. The agent talks; `context` tells it why it is calling.
+CreateCallRequest request = CreateCallRequest.builder()
+    .to("+15555550123")
+    .agentId("3c4d5e6f-7081-4293-a4b5-c6d7e8f90a1b")
+    .from("+15555550188")                 // optional with exactly one voice-enabled number
+    .context("You are calling Jordan to confirm the 3pm appointment on Tuesday.")
+    .metadata("crmId", "lead_8812")       // echoed on every read and in call.* webhooks
+    .build();
+Call call = client.calls().create(request);
+System.out.println(call.getStatus());     // "ringing"
+
+// List calls, newest first, with filters and paging
+CallListResponse page = client.calls().list(ListCallsOptions.builder()
+    .status(CallStatus.COMPLETED)
+    .direction(CallDirection.OUTBOUND)
+    .agentId("3c4d5e6f-7081-4293-a4b5-c6d7e8f90a1b")
+    .limit(20)
+    .build());
+for (Call c : page.getData()) {
+    System.out.println(c.getTo() + " " + c.getDurationSecs() + "s " + c.getCreditsCharged() + " credits");
+}
+if (page.hasMore()) { /* fetch offset(page.getOffset() + page.getLimit()) */ }
+
+// Inspect one call. Agent-handled calls carry their transcript.
+Call finished = client.calls().get(call.getId());
+System.out.println(finished.getStatus() + " " + finished.getHangupClass());
+if (finished.getTranscript() != null) {
+    for (CallTranscriptLine line : finished.getTranscript()) {
+        System.out.println(line.getSpeaker() + ": " + line.getText());
+    }
+}
+
+// End a call early. Ringing -> cancelled, active -> completed; an ended call is returned unchanged.
+client.calls().hangup(call.getId());
+
+// Fetch the recording. The URL is signed and works for five minutes.
+CallRecording recording = client.calls().recording(call.getId());
+if (recording.isReady()) {
+    System.out.println(recording.getUrl() + " until " + recording.getExpiresAt());
+}
+
+// Writes accept your own idempotency key, like every other write
+client.calls().create(request, new IdempotentRequestOptions("call-lead_8812"));
+```
+
+Refusals name their reason in `getApiErrorCode()` (constants in
+`CallErrorCode`):
+
+```java
+try {
+    client.calls().create(request);
+} catch (InsufficientCreditsException e) {
+    // 402 insufficient_credits: the balance does not cover one minute
+} catch (SendlyException e) {
+    String code = e.getApiErrorCode() != null ? e.getApiErrorCode() : "";
+    switch (code) {
+        case CallErrorCode.E911_REQUIRED -> { /* 428: register an emergency address in the dashboard */ }
+        case CallErrorCode.LINES_BUSY -> { /* 409: every line is in use, retry with backoff */ }
+        case CallErrorCode.DAILY_CALL_LIMIT -> { /* 429: try again tomorrow */ }
+        case CallErrorCode.FROM_NUMBER_REQUIRED -> { /* 400: more than one voice-enabled number, set from() */ }
+        default -> throw e;
+    }
+}
+```
+
+`CallStatus`, `CallDirection`, `CallKind`, `CallHandledBy`, `CallBilling` and
+`CallRecordingStatus` hold the string values the call object uses.
+
 ## Webhooks
 
 ```java

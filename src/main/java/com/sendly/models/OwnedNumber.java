@@ -17,6 +17,8 @@ public class OwnedNumber {
     private String requirementsSubmittedAt;
     private boolean pendingCancellation;
     private String scheduledReleaseAt;
+    private boolean voiceEnabled;
+    private String voiceMode;
 
     public OwnedNumber() {}
 
@@ -53,6 +55,12 @@ public class OwnedNumber {
         }
         if (json.has("scheduledReleaseAt") && !json.get("scheduledReleaseAt").isJsonNull()) {
             this.scheduledReleaseAt = json.get("scheduledReleaseAt").getAsString();
+        }
+        if (json.has("voiceEnabled") && !json.get("voiceEnabled").isJsonNull()) {
+            this.voiceEnabled = json.get("voiceEnabled").getAsBoolean();
+        }
+        if (json.has("voiceMode") && !json.get("voiceMode").isJsonNull()) {
+            this.voiceMode = json.get("voiceMode").getAsString();
         }
     }
 
@@ -91,4 +99,10 @@ public class OwnedNumber {
 
     /** When the number is scheduled to be released (ISO-8601), or null if not scheduled. */
     public String getScheduledReleaseAt() { return scheduledReleaseAt; }
+
+    /** True if the number can take and place phone calls. Switched on in the dashboard under Calls. */
+    public boolean isVoiceEnabled() { return voiceEnabled; }
+
+    /** How the number answers: "none", "ring_dashboard" (the team answers) or "agent" (an AI agent answers). */
+    public String getVoiceMode() { return voiceMode; }
 }

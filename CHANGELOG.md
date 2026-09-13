@@ -1,5 +1,19 @@
 # sendly-java
 
+## Unreleased
+
+### Minor Changes
+
+- **Voice calls on `calls()`.** Place a phone call that one of your AI agents handles, list and inspect calls, end one, and fetch its recording: `calls().create(CreateCallRequest)`, `list()` / `list(ListCallsOptions)`, `get(id)`, `hangup(id)` and `recording(id)`. `create` and `hangup` also take an `IdempotentRequestOptions` overload; both send an `Idempotency-Key` automatically like every other POST. `create` refuses client-side (a `ValidationException`, no request made) when `to` or `agentId` is blank, and the id methods when the id is blank; phone-number format is left to the server. Calls need an API key with the `calls:read` / `calls:write` scopes, a live key for writes, and answer 404 `voice_not_enabled` (a `NotFoundException`) until voice is enabled for your workspace.
+
+  Calls are prepaid from the workspace balance per started minute (an agent-handled outbound call is 10 credits a minute; an unanswered call costs nothing) and can only be placed to US and Canadian numbers. The number you call from must have voice switched on and an emergency address registered in the dashboard.
+
+  New models: `Call` (with `getTranscript()`, populated by `get(id)` for agent-handled calls and `null` otherwise), `CallTranscriptLine`, `CallListResponse` (`getData()`, `getTotal()`, `getLimit()`, `getOffset()`, `hasMore()`), `CallRecording` (`getUrl()` and `getExpiresAt()` are `null` until the status is `ready`; the URL works for five minutes), `CreateCallRequest` and `ListCallsOptions` builders, and the string-constant classes `CallStatus`, `CallDirection`, `CallKind`, `CallHandledBy`, `CallBilling`, `CallRecordingStatus` and `CallErrorCode` (every `error` code the calls endpoints answer with, e.g. `e911_required`, `lines_busy`, `from_number_required`, `call_not_found`).
+
+- **`OwnedNumber.isVoiceEnabled()` and `getVoiceMode()`** on `numbers().list()` and `numbers().get(id)`: whether the number can take and place calls, and how it answers (`none`, `ring_dashboard` or `agent`), so you can find a `from` number for `calls().create`.
+
+- **Call webhooks carry `billing` and `metadata`.** The `call.started`, `call.completed` and `call.recording.ready` payloads (already declared in `WebhookEventType`) now also include the call's `billing` state and the `metadata` pairs you attached on create. Read them through `getRawObject()` or `objectAs(...)`; no type changed. Nothing in this release was deprecated, renamed or removed.
+
 ## 4.0.0
 
 ### Major Changes

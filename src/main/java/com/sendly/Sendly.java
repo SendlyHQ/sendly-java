@@ -23,6 +23,7 @@ import com.sendly.resources.TenDlcResource;
 import com.sendly.resources.LinksResource;
 import com.sendly.resources.WhatsAppResource;
 import com.sendly.resources.RcsResource;
+import com.sendly.resources.CallsResource;
 import okhttp3.*;
 
 import com.google.gson.JsonElement;
@@ -79,6 +80,7 @@ public class Sendly {
     private final LinksResource links;
     private final WhatsAppResource whatsapp;
     private final RcsResource rcs;
+    private final CallsResource calls;
 
     /**
      * Create a new Sendly client with default settings.
@@ -134,6 +136,7 @@ public class Sendly {
         this.links = new LinksResource(this);
         this.whatsapp = new WhatsAppResource(this);
         this.rcs = new RcsResource(this);
+        this.calls = new CallsResource(this);
     }
 
     /**
@@ -305,6 +308,22 @@ public class Sendly {
      */
     public RcsResource rcs() {
         return rcs;
+    }
+
+    /**
+     * Get the Calls resource (phone calls handled by your AI agents).
+     *
+     * <pre>{@code
+     * Call call = client.calls().create(CreateCallRequest.builder()
+     *     .to("+15555550123")
+     *     .agentId("3c4d5e6f-7081-4293-a4b5-c6d7e8f90a1b")
+     *     .build());
+     * }</pre>
+     *
+     * @return Calls resource
+     */
+    public CallsResource calls() {
+        return calls;
     }
 
     /**
