@@ -1,5 +1,25 @@
 # sendly-java
 
+## 4.2.0
+
+### Minor Changes
+
+- **Configure voice from code on `voice()`.** Everything a call depends on used to be dashboard-only; it is now on three sub-resources. `voice().numbers()`: `list()`, `get(number)`, `update(number, UpdateVoiceNumberRequest)` (switch voice on or off, choose how the number answers, point it at an agent) and `registerEmergencyAddress(number, EmergencyAddress)`. `voice().agents()`: `list()`, `create(CreateVoiceAgentRequest)`, `get(id)`, `update(id, UpdateVoiceAgentRequest)` and `delete(id)`. `voice().voices()`: `list()`. A `number` is the number's id or its E.164 phone number, percent-encoded in the path (`+15555550188` is sent as `%2B15555550188`). Every write takes an `IdempotentRequestOptions` overload, and the two POSTs send an `Idempotency-Key` automatically like every other POST. Blank ids and numbers, a blank agent `name` on create, and a blank `street`, `city`, `state` or `zip` are refused client-side with a `ValidationException` before any request is made; phone formats and modes are left to the server.
+
+  These endpoints use the existing `calls:read` / `calls:write` scopes and need a live key for writes. In a team workspace, number and emergency-address writes also need a role that can change settings and agent writes a role that can manage API keys (403 `forbidden` otherwise). Switching voice on changes how real calls to the number are answered; the first emergency address on a number adds $1.50 a month. Deleting an agent that still answers a number is refused with 409 `agent_in_use`.
+
+  New models: `VoiceNumber`, `VoiceNumberListResponse`, `VoiceNumberEmergencyAddress`, `EmergencyAddress` (a builder for registering, and the address read back), `VoiceNumberRates`, `UpdateVoiceNumberRequest`, `VoiceAgent`, `VoiceAgentListResponse`, `VoiceAgentTools` (read back, or built to set on a request), `CreateVoiceAgentRequest`, `UpdateVoiceAgentRequest`, `DeletedVoiceAgent`, `Voice`, `VoiceListResponse`, and the string-constant class `VoiceMode` (`NONE`, `RING_DASHBOARD`, `AGENT`).
+
+- **`CallErrorCode` covers voice configuration**: `AGENT_IN_USE`, `AGENT_LIMIT`, `INVALID_VOICE_MODE`, `INVALID_ADDRESS`, `E911_NOT_APPLICABLE`, `VOICE_ATTACH_FAILED` and `CARRIER_REFUSED` are new; `NUMBER_NOT_FOUND`, `AGENT_REQUIRED`, `AGENT_DISABLED` and `FORBIDDEN` now also describe their voice-configuration meanings.
+
+- **`SendlyException.getResponseBody()`** returns the API response body an error was mapped from, as a Gson `JsonObject`, for every resource. It reaches fields beyond `error` and `message`, such as `numbers` on 409 `agent_in_use` and `suggested` on 422 `invalid_address`. It is null for errors that did not come from a response.
+
+- **`delete(path, idempotencyKey)`** on the client sends a caller-supplied `Idempotency-Key` on DELETE, like the PATCH and PUT overloads. No key is generated automatically; `delete(path)` behaves exactly as before.
+
+### Fixes
+
+- **Recording channels are documented the right way round.** `calls().recording()` described agent-call recordings as caller on the left and agent on the right. Agent-handled calls are recorded with the agent on the left channel and the other party on the right.
+
 ## 4.1.0
 
 ### Minor Changes

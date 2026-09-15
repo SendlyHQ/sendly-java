@@ -639,10 +639,11 @@ client.links().enable(link.getCode());
 ## Voice Calls
 
 Place phone calls that one of your AI agents handles, follow them while they
-run, end them, and download recordings. Numbers are set up in the dashboard:
-switch voice on for a number under Calls, choose how it answers, and register
-its emergency address. `numbers().list()` reports `isVoiceEnabled()` and
-`getVoiceMode()` so you can pick a `from` number.
+run, end them, and download recordings. Numbers are set up with `voice()` (see
+[Configure voice](#configure-voice)) or in the dashboard under Calls: switch
+voice on for a number, choose how it answers, and register its emergency
+address. `voice().numbers().list()` reports each number's voice settings so you
+can pick a `from` number.
 
 > **Note**: Calls are prepaid from your balance per started minute. An
 > agent-handled outbound call costs 10 credits a minute (2 for the call, 8 for
@@ -708,7 +709,7 @@ try {
 } catch (SendlyException e) {
     String code = e.getApiErrorCode() != null ? e.getApiErrorCode() : "";
     switch (code) {
-        case CallErrorCode.E911_REQUIRED -> { /* 428: register an emergency address in the dashboard */ }
+        case CallErrorCode.E911_REQUIRED -> { /* 428: register the number's emergency address first */ }
         case CallErrorCode.LINES_BUSY -> { /* 409: every line is in use, retry with backoff */ }
         case CallErrorCode.DAILY_CALL_LIMIT -> { /* 429: try again tomorrow */ }
         case CallErrorCode.FROM_NUMBER_REQUIRED -> { /* 400: more than one voice-enabled number, set from() */ }
@@ -719,6 +720,124 @@ try {
 
 `CallStatus`, `CallDirection`, `CallKind`, `CallHandledBy`, `CallBilling` and
 `CallRecordingStatus` hold the string values the call object uses.
+
+### Configure voice
+
+`client.voice()` configures everything a call depends on: which numbers take
+calls and how they answer, each number's emergency address, and the AI agents
+themselves. Reads need `calls:read` and writes `calls:write` with a live key.
+In a team workspace, number and emergency-address writes also need a role that
+can change settings, and agent writes a role that can manage API keys (each
+agent holds its own scoped sending key); otherwise the API answers 403
+`forbidden`. A `number` is the number's id or its E.164 phone number.
+
+Switching voice on for a number changes how real phone calls to it are
+answered, and an agent answers real callers on every number pointed at it. A
+US or Canadian number needs an emergency address before it can place calls;
+the first registration adds $1.50 a month to the number, and registering again
+replaces the address without charging twice.
+
+```java
+// Numbers and how they answer
+VoiceNumberListResponse numbers = client.voice().numbers().list();
+for (VoiceNumber n : numbers.getData()) {
+    VoiceNumberEmergencyAddress e911 = n.getEmergencyAddress();
+    System.out.println(n.getPhoneNumber() + " " + n.getVoiceMode() + " "
+        + (e911 != null ? e911.getStatus() : "no emergency address"));
+}
+
+VoiceNumber number = client.voice().numbers().get("+15555550188");
+System.out.println(number.getRatePerMinute().getOutbound() + " credits a minute outbound");
+
+// Register the emergency address (country defaults to US)
+number = client.voice().numbers().registerEmergencyAddress("+15555550188", EmergencyAddress.builder()
+    .street("500 Example Ave")
+    .unit("Suite 2")
+    .city("Austin")
+    .state("TX")
+    .zip("78701")
+    .build());
+System.out.println(number.getEmergencyAddress().getStatus()); // "provisioning", then "active"
+
+// Voices, then an agent
+VoiceListResponse voices = client.voice().voices().list();
+VoiceAgent agent = client.voice().agents().create(CreateVoiceAgentRequest.builder()
+    .name("Front desk")
+    .voice(voices.getData().get(0).getId())
+    .greeting("Thanks for calling Acme, how can I help?")
+    .instructions("Answer questions about opening hours and take a message for anything else.")
+    .tools(VoiceAgentTools.builder().sendSms(true).build())
+    .build());
+
+// Have the agent answer the number
+number = client.voice().numbers().update("+15555550188", UpdateVoiceNumberRequest.builder()
+    .voiceEnabled(true)
+    .voiceMode(VoiceMode.AGENT)
+    .agentId(agent.getId())
+    .build());
+
+// Change an agent (only the fields you set are sent)
+agent = client.voice().agents().update(agent.getId(), UpdateVoiceAgentRequest.builder()
+    .greeting("Thanks for calling Acme. How can I help today?")
+    .build());
+
+// Ring the team instead, then delete the agent
+client.voice().numbers().update("+15555550188", UpdateVoiceNumberRequest.builder()
+    .voiceMode(VoiceMode.RING_DASHBOARD)
+    .build());
+DeletedVoiceAgent deleted = client.voice().agents().delete(agent.getId());
+System.out.println(deleted.isDeleted()); // true
+```
+
+A mode alone is enough: `VoiceMode.RING_DASHBOARD` or `VoiceMode.AGENT`
+switches voice on, so it can fail the way switching on does (502
+`voice_attach_failed`, 503 `voice_unavailable`), and `VoiceMode.NONE` switches
+it off. `voiceEnabled(false)` wins over any mode, and `VoiceMode.NONE` with
+`voiceEnabled(true)` becomes `ring_dashboard`. An empty
+`agentId` clears the stored agent, and an empty `transferTo` clears that tool.
+Agents cannot transfer calls yet: while `transferTo` is set, a caller who asks
+for a person is told the message will be passed on, and the agent takes their
+name and number. Every write also takes an `IdempotentRequestOptions`
+overload.
+
+Refusals carry `getApiErrorCode()` as usual: 400 `ValidationException`
+(`invalid_request`, `invalid_voice_mode`, `agent_required`, `invalid_address`,
+`e911_not_applicable`), 404 `NotFoundException` (`number_not_found`,
+`agent_not_found`), 409 `SendlyException` (`agent_disabled`, `agent_limit`,
+`agent_in_use`), 422 `ValidationException` (`invalid_address`, the address
+couldn't be validated), 502 `SendlyException` (`voice_attach_failed`,
+`carrier_refused`) and 503 `SendlyException` (`voice_unavailable`). A 5xx is
+thrown only after the client has already retried it on its own. Not every
+`carrier_refused` is worth retrying: when the message says the number couldn't
+be found for emergency registration, retrying won't help, so contact support;
+when it says the address couldn't be registered or emergency calling couldn't
+be switched on, try again later.
+A 422 is thrown as a `ValidationException` like a 400, so tell the two
+`invalid_address` refusals apart by the `suggested` field the 422 carries.
+Extra fields are on `getResponseBody()`:
+
+```java
+try {
+    client.voice().agents().delete(agent.getId());
+} catch (SendlyException e) {
+    if (!CallErrorCode.AGENT_IN_USE.equals(e.getApiErrorCode())) throw e;
+    for (JsonElement n : e.getResponseBody().getAsJsonArray("numbers")) {
+        System.out.println("Still answering " + n.getAsString());
+    }
+}
+
+try {
+    client.voice().numbers().registerEmergencyAddress("+15555550188", address);
+} catch (ValidationException e) {
+    if (!CallErrorCode.INVALID_ADDRESS.equals(e.getApiErrorCode())) throw e;
+    JsonObject body = e.getResponseBody();
+    if (body != null && body.has("suggested")) {
+        System.out.println("Did you mean: " + body.get("suggested")); // 422: null when no correction was found
+    } else {
+        System.out.println(e.getMessage());                          // 400: a field is missing or malformed
+    }
+}
+```
 
 ## Webhooks
 

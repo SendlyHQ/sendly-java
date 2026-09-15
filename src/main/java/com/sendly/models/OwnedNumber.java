@@ -100,9 +100,15 @@ public class OwnedNumber {
     /** When the number is scheduled to be released (ISO-8601), or null if not scheduled. */
     public String getScheduledReleaseAt() { return scheduledReleaseAt; }
 
-    /** True if the number can take and place phone calls. Switched on in the dashboard under Calls. */
+    /**
+     * True if the number can take and place phone calls. Switched on with
+     * {@code client.voice().numbers()} or in the dashboard under Calls.
+     */
     public boolean isVoiceEnabled() { return voiceEnabled; }
 
-    /** How the number answers: "none", "ring_dashboard" (the team answers) or "agent" (an AI agent answers). */
+    /**
+     * How inbound calls are answered: "none", "ring_dashboard" (the team answers) or "agent" (an AI agent answers).
+     * Changed with {@code client.voice().numbers().update()}.
+     */
     public String getVoiceMode() { return voiceMode; }
 }

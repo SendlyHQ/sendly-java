@@ -16,10 +16,10 @@ import com.sendly.models.ListCallsOptions;
  * <p>
  * Place an outbound call that one of your agents talks on, list and inspect
  * calls (with the transcript of an agent-handled call), end a call, and fetch
- * a recording. Which numbers can call is configured in the dashboard: switch
- * voice on for a number, pick how it answers, and register its emergency
- * address. {@code numbers().list()} reports {@code voiceEnabled} and
- * {@code voiceMode} so you can find a {@code from} number.
+ * a recording. Which numbers can call is configured with {@code voice()} or in
+ * the dashboard: switch voice on for a number, pick how it answers, and
+ * register its emergency address. {@code voice().numbers().list()} reports
+ * each number's voice settings so you can find a {@code from} number.
  * </p>
  * <p>
  * Calls are prepaid from the workspace balance per started minute: an
@@ -182,7 +182,8 @@ public class CallsResource {
      * Fetch a call's recording. When the status is {@code ready} the response
      * carries a signed download URL that works for five minutes; fetch again
      * for a fresh one. Recordings are Ogg/Opus; agent-handled calls are
-     * recorded dual-channel (caller left, agent right).
+     * recorded dual-channel, the agent on the left channel and the other
+     * party on the right.
      *
      * @param id The call's id
      * @return The recording's status and, when ready, its URL and expiry

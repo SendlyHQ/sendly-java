@@ -24,6 +24,7 @@ import com.sendly.resources.LinksResource;
 import com.sendly.resources.WhatsAppResource;
 import com.sendly.resources.RcsResource;
 import com.sendly.resources.CallsResource;
+import com.sendly.resources.VoiceResource;
 import okhttp3.*;
 
 import com.google.gson.JsonElement;
@@ -81,6 +82,7 @@ public class Sendly {
     private final WhatsAppResource whatsapp;
     private final RcsResource rcs;
     private final CallsResource calls;
+    private final VoiceResource voice;
 
     /**
      * Create a new Sendly client with default settings.
@@ -137,6 +139,7 @@ public class Sendly {
         this.whatsapp = new WhatsAppResource(this);
         this.rcs = new RcsResource(this);
         this.calls = new CallsResource(this);
+        this.voice = new VoiceResource(this);
     }
 
     /**
@@ -324,6 +327,27 @@ public class Sendly {
      */
     public CallsResource calls() {
         return calls;
+    }
+
+    /**
+     * Get the Voice resource (numbers, AI agents and voices for phone calls).
+     *
+     * <pre>{@code
+     * VoiceAgent agent = client.voice().agents().create(CreateVoiceAgentRequest.builder()
+     *     .name("Front desk")
+     *     .greeting("Thanks for calling Acme, how can I help?")
+     *     .build());
+     * client.voice().numbers().update("+15555550188", UpdateVoiceNumberRequest.builder()
+     *     .voiceEnabled(true)
+     *     .voiceMode(VoiceMode.AGENT)
+     *     .agentId(agent.getId())
+     *     .build());
+     * }</pre>
+     *
+     * @return Voice resource
+     */
+    public VoiceResource voice() {
+        return voice;
     }
 
     /**
@@ -599,12 +623,33 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject delete(String path) throws SendlyException {
+        return delete(path, null);
+    }
+
+    /**
+     * Make a DELETE request with a caller-supplied idempotency key.
+     * <p>
+     * Unlike {@link #post(String, Object)}, no key is generated automatically
+     * for DELETE; the header is sent only when {@code idempotencyKey} is given.
+     * </p>
+     *
+     * @param path           API endpoint path
+     * @param idempotencyKey Idempotency key for this request (1-255 printable
+     *                       ASCII characters), or null to send none
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject delete(String path, String idempotencyKey) throws SendlyException {
+        String key = normalizeIdempotencyKey(idempotencyKey);
         Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
                 .delete()
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
                 .addHeader("User-Agent", "sendly-java/" + VERSION);
+        if (key != null) {
+            reqBuilder.addHeader("Idempotency-Key", key);
+        }
         if (organizationId != null && !organizationId.isEmpty()) {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
@@ -824,7 +869,7 @@ public class Sendly {
                 case 400, 422 -> new ValidationException(message);
                 default -> new SendlyException(message, response.code());
             };
-            throw mapped.withApiError(apiErrorCodeOf(error), fieldErrorsOf(error));
+            throw mapped.withApiError(apiErrorCodeOf(error), fieldErrorsOf(error)).withResponseBody(error);
         } catch (IOException e) {
             throw new NetworkException("Request failed: " + e.getMessage());
         }

@@ -1,5 +1,7 @@
 package com.sendly.exceptions;
 
+import com.google.gson.JsonObject;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,6 +14,7 @@ public class SendlyException extends RuntimeException {
     private final String errorCode;
     private String apiErrorCode;
     private List<FieldError> fieldErrors = Collections.emptyList();
+    private JsonObject responseBody;
 
     public SendlyException(String message) {
         this(message, 0);
@@ -76,6 +79,30 @@ public class SendlyException extends RuntimeException {
         this.fieldErrors = fieldErrors == null
                 ? Collections.emptyList()
                 : Collections.unmodifiableList(new ArrayList<>(fieldErrors));
+        return this;
+    }
+
+    /**
+     * The API response body this error was mapped from, or null when the
+     * error did not come from an API response (a network failure, or a
+     * refusal raised client-side). Use it for fields beyond {@code error} and
+     * {@code message}: the {@code numbers} still answering with an agent on
+     * 409 {@code agent_in_use}, or the {@code suggested} address on 422
+     * {@code invalid_address}.
+     */
+    public JsonObject getResponseBody() {
+        return responseBody;
+    }
+
+    /**
+     * Attach the parsed API response body. Called by the client when it maps
+     * a response to an exception.
+     *
+     * @param responseBody The response body (may be null)
+     * @return this exception
+     */
+    public SendlyException withResponseBody(JsonObject responseBody) {
+        this.responseBody = responseBody;
         return this;
     }
 
