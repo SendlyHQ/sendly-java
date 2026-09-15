@@ -163,7 +163,7 @@ public class WhatsAppResource {
          *
          * @param phoneNumber The number to connect, in E.164 format. Must be an
          *                    active number in your workspace (provisioned,
-         *                    purchased, or ported into Sendly).
+         *                    purchased, or fully ported into Sendly).
          * @return The signup with its {@code connectUrl}
          * @throws SendlyException if the request fails
          */
