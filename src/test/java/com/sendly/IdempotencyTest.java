@@ -14,6 +14,7 @@ import com.sendly.models.SendBatchRequest;
 import com.sendly.models.SendGroupMessageRequest;
 import com.sendly.models.SendMessageRequest;
 import com.sendly.models.SendRcsMessageRequest;
+import com.sendly.models.SendVerificationRequest;
 import com.sendly.models.SendWhatsAppMessageRequest;
 import com.sendly.models.WhatsAppMessage;
 import okhttp3.mockwebserver.MockResponse;
@@ -34,7 +35,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for automatic idempotency keys - generation, retry reuse, rotation.
+ * Tests for automatic idempotency keys - generation and reuse across retries.
  */
 class IdempotencyTest {
     private static final String AUTO_KEY_REGEX =
@@ -72,6 +73,27 @@ class IdempotencyTest {
 
     private static MockResponse mockTimeout() {
         return new MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE);
+    }
+
+    private static MockResponse edgeJsonError(int code, String title) {
+        return new MockResponse()
+                .setResponseCode(code)
+                .setBody("{\"type\":\"https://developers.cloudflare.com/support/troubleshooting/http-status-codes/"
+                        + "cloudflare-5xx-errors/error-" + code + "/\",\"title\":\"Error " + code + ": " + title + "\","
+                        + "\"status\":" + code + ",\"detail\":\"The origin web server did not respond in time.\","
+                        + "\"instance\":\"9f140b785e57c458\",\"error_code\":" + code + ",\"error_category\":\"origin\","
+                        + "\"ray_id\":\"9f140b785e57c458\",\"timestamp\":\"2026-09-24T13:10:00Z\",\"zone\":\"sendly.live\","
+                        + "\"cloudflare_error\":true,\"retryable\":true,\"retry_after\":60,\"owner_action_required\":true}")
+                .addHeader("Content-Type", "application/json; charset=utf-8")
+                .addHeader("Retry-After", "60");
+    }
+
+    private static MockResponse edgeErrorPage(int code, String title) {
+        return new MockResponse()
+                .setResponseCode(code)
+                .setBody("<!DOCTYPE html>\n<html lang=\"en-US\"><head><title>sendly.live | " + title
+                        + "</title></head><body><h1>" + title + "</h1></body></html>")
+                .addHeader("Content-Type", "text/html; charset=UTF-8");
     }
 
     private static String keyOf(RecordedRequest request) {
@@ -211,7 +233,7 @@ class IdempotencyTest {
     }
 
     @Test
-    void testSend_serverErrorRetry_rotatesAutoKey() throws Exception {
+    void testSend_serverErrorRetry_keepsAutoKey() throws Exception {
         mockServer.enqueue(TestHelpers.mockServerError());
         mockServer.enqueue(TestHelpers.mockSuccess(
             TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
@@ -225,12 +247,11 @@ class IdempotencyTest {
         String first = keyOf(mockServer.takeRequest());
         String second = keyOf(mockServer.takeRequest());
         assertTrue(first.startsWith(AUTO_KEY_PREFIX));
-        assertTrue(second.startsWith(AUTO_KEY_PREFIX));
-        assertNotEquals(first, second);
+        assertEquals(first, second);
     }
 
     @Test
-    void testSend_serverErrorThenTimeout_keepsRotatedKey() throws Exception {
+    void testSend_serverErrorThenTimeout_keepsAutoKey() throws Exception {
         mockServer.enqueue(TestHelpers.mockServerError());
         mockServer.enqueue(mockTimeout());
         mockServer.enqueue(TestHelpers.mockSuccess(
@@ -245,8 +266,79 @@ class IdempotencyTest {
         String first = keyOf(mockServer.takeRequest());
         String second = keyOf(mockServer.takeRequest());
         String third = keyOf(mockServer.takeRequest());
-        assertNotEquals(first, second);
+        assertEquals(first, second);
         assertEquals(second, third);
+    }
+
+    @Test
+    void testSend_edgeTimeoutPageRetry_keepsAutoKey() throws Exception {
+        mockServer.enqueue(edgeErrorPage(524, "524: A timeout occurred"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
+        ));
+
+        Sendly retrying = retryingClient(1);
+        Message message = retrying.messages().send(new SendMessageRequest("+15551234567", "Hello!"));
+
+        assertEquals("msg_123", message.getId());
+        assertEquals(2, mockServer.getRequestCount());
+        String first = keyOf(mockServer.takeRequest());
+        String second = keyOf(mockServer.takeRequest());
+        assertTrue(first.startsWith(AUTO_KEY_PREFIX));
+        assertEquals(first, second);
+    }
+
+    @Test
+    void testSend_edgeTimeoutJsonProblemRetry_keepsAutoKey() throws Exception {
+        mockServer.enqueue(edgeJsonError(524, "A timeout occurred"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
+        ));
+
+        Sendly retrying = retryingClient(1);
+        Message message = retrying.messages().send(new SendMessageRequest("+15551234567", "Hello!"));
+
+        assertEquals("msg_123", message.getId());
+        assertEquals(2, mockServer.getRequestCount());
+        String first = keyOf(mockServer.takeRequest());
+        String second = keyOf(mockServer.takeRequest());
+        assertTrue(first.startsWith(AUTO_KEY_PREFIX));
+        assertEquals(first, second);
+    }
+
+    @Test
+    void testVerifySend_edgeBadGatewayPageRetry_keepsAutoKey() throws Exception {
+        mockServer.enqueue(edgeErrorPage(502, "502: Bad gateway"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"ver_1\",\"status\":\"pending\",\"phone\":\"+15551234567\",\"expires_at\":\"2026-09-25T10:10:00.000Z\","
+                + "\"sandbox\":true,\"sandbox_code\":\"123456\","
+                + "\"message\":\"Sandbox mode: SMS not sent. Use the sandbox_code to verify.\"}"
+        ).setResponseCode(201));
+
+        Sendly retrying = retryingClient(1);
+        retrying.verify().send(new SendVerificationRequest("+15551234567"));
+
+        assertEquals(2, mockServer.getRequestCount());
+        RecordedRequest first = mockServer.takeRequest();
+        RecordedRequest second = mockServer.takeRequest();
+        assertTrue(first.getPath().endsWith("/verify"), first.getPath());
+        assertTrue(keyOf(first).startsWith(AUTO_KEY_PREFIX));
+        assertEquals(keyOf(first), keyOf(second));
+    }
+
+    @Test
+    void testMediaUpload_edgeErrorPageRetry_keepsAutoKey() throws Exception {
+        mockServer.enqueue(edgeErrorPage(520, "520: Web server is returning an unknown error"));
+        mockServer.enqueue(TestHelpers.mockSuccess(mediaFileJson()));
+
+        Sendly retrying = retryingClient(1);
+        retrying.media().upload(tempMediaFile(), "image/jpeg");
+
+        assertEquals(2, mockServer.getRequestCount());
+        String first = keyOf(mockServer.takeRequest());
+        String second = keyOf(mockServer.takeRequest());
+        assertTrue(first.startsWith(AUTO_KEY_PREFIX));
+        assertEquals(first, second);
     }
 
     @Test
@@ -271,7 +363,7 @@ class IdempotencyTest {
     }
 
     @Test
-    void testMediaUpload_serverErrorRetry_rotatesAutoKey() throws Exception {
+    void testMediaUpload_serverErrorRetry_keepsAutoKey() throws Exception {
         mockServer.enqueue(TestHelpers.mockServerError());
         mockServer.enqueue(TestHelpers.mockSuccess(mediaFileJson()));
 
@@ -282,8 +374,7 @@ class IdempotencyTest {
         String first = keyOf(mockServer.takeRequest());
         String second = keyOf(mockServer.takeRequest());
         assertTrue(first.startsWith(AUTO_KEY_PREFIX));
-        assertTrue(second.startsWith(AUTO_KEY_PREFIX));
-        assertNotEquals(first, second);
+        assertEquals(first, second);
     }
 
     // ==================== Caller-Supplied Key Tests ====================

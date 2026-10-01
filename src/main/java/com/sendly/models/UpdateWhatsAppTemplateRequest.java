@@ -51,7 +51,10 @@ public class UpdateWhatsAppTemplateRequest {
             return this;
         }
 
-        /** Replacement text header. */
+        /**
+         * Replacement text header. It can't contain {@code {{n}}} variables
+         * ({@code template_header_variable_unsupported}).
+         */
         public Builder header(String header) {
             this.header = header;
             return this;

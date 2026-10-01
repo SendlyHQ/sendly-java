@@ -201,14 +201,45 @@ public class EnterpriseResource {
             return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification/submit", data);
         }
 
+        /**
+         * Give a workspace the verification of another workspace you own,
+         * sharing its toll-free number.
+         *
+         * @param workspaceId       Workspace that inherits the verification
+         * @param sourceWorkspaceId Workspace whose verification is inherited
+         * @return The inherited verification
+         * @throws SendlyException if the request fails
+         */
         public JsonObject inheritVerification(String workspaceId, String sourceWorkspaceId) throws SendlyException {
+            return inheritVerification(workspaceId, sourceWorkspaceId, false);
+        }
+
+        /**
+         * Give a workspace the verification of another workspace you own.
+         *
+         * @param workspaceId       Workspace that inherits the verification
+         * @param sourceWorkspaceId Workspace whose verification is inherited
+         * @param purchaseNewNumber True to copy only the business details,
+         *                          buy the workspace its own toll-free number
+         *                          and submit it for verification. The
+         *                          response then has {@code newNumber: true},
+         *                          and its {@code tollFreeNumber} is null if no
+         *                          number could be bought. False shares the
+         *                          source workspace's verified number.
+         * @return The inherited verification
+         * @throws SendlyException if the request fails
+         */
+        public JsonObject inheritVerification(String workspaceId, String sourceWorkspaceId, boolean purchaseNewNumber) throws SendlyException {
             validateWorkspaceId(workspaceId);
             if (sourceWorkspaceId == null || sourceWorkspaceId.isEmpty()) {
                 throw new ValidationException("Source workspace ID is required");
             }
 
             JsonObject body = new JsonObject();
-            body.addProperty("source_workspace_id", sourceWorkspaceId);
+            body.addProperty("sourceWorkspaceId", sourceWorkspaceId);
+            if (purchaseNewNumber) {
+                body.addProperty("purchaseNewNumber", true);
+            }
 
             return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/verification/inherit", body);
         }
@@ -239,17 +270,31 @@ public class EnterpriseResource {
             return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/credits", null);
         }
 
+        /**
+         * Create a test API key named "API key" for a workspace.
+         *
+         * @param workspaceId Workspace ID
+         * @return The created key, including the raw key value (shown only once)
+         * @throws SendlyException if the request fails
+         */
         public JsonObject createKey(String workspaceId) throws SendlyException {
             return createKey(workspaceId, null, null);
         }
 
+        /**
+         * Create an API key for a workspace.
+         *
+         * @param workspaceId Workspace ID
+         * @param name        Key name; null or empty names the key "API key"
+         * @param type        {@code test} or {@code live}; null creates a test key
+         * @return The created key, including the raw key value (shown only once)
+         * @throws SendlyException if the request fails
+         */
         public JsonObject createKey(String workspaceId, String name, String type) throws SendlyException {
             validateWorkspaceId(workspaceId);
 
             JsonObject body = new JsonObject();
-            if (name != null && !name.isEmpty()) {
-                body.addProperty("name", name);
-            }
+            body.addProperty("name", name != null && !name.isEmpty() ? name : "API key");
             if (type != null && !type.isEmpty()) {
                 body.addProperty("type", type);
             }
@@ -287,6 +332,14 @@ public class EnterpriseResource {
             client.delete("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/keys/" + PathParams.encode(keyId));
         }
 
+        /**
+         * List a workspace's opt-in pages.
+         *
+         * @param workspaceId Workspace ID
+         * @return {@code {"data": [...]}}: the API answers with a list of
+         *         pages, which is returned under {@code data}
+         * @throws SendlyException if the request fails
+         */
         public JsonObject listOptInPages(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
             return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/opt-in-pages", null);
@@ -333,6 +386,14 @@ public class EnterpriseResource {
             return client.put("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks", options);
         }
 
+        /**
+         * List a workspace's webhooks.
+         *
+         * @param workspaceId Workspace ID
+         * @return {@code {"data": [...]}}: the API answers with a list of
+         *         webhooks, which is returned under {@code data}
+         * @throws SendlyException if the request fails
+         */
         public JsonObject listWebhooks(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
             return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/webhooks", null);
@@ -378,8 +439,8 @@ public class EnterpriseResource {
             if (workspaces == null || workspaces.size() == 0) {
                 throw new ValidationException("Workspaces array is required");
             }
-            if (workspaces.size() > 50) {
-                throw new ValidationException("Maximum 50 workspaces per bulk provision");
+            if (workspaces.size() > 100) {
+                throw new ValidationException("Maximum 100 workspaces per bulk provision");
             }
 
             JsonObject body = new JsonObject();
@@ -419,6 +480,14 @@ public class EnterpriseResource {
             return client.post("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/invitations", body);
         }
 
+        /**
+         * List a workspace's invitations.
+         *
+         * @param workspaceId Workspace ID
+         * @return {@code {"data": [...]}}: the API answers with a list of
+         *         invitations, which is returned under {@code data}
+         * @throws SendlyException if the request fails
+         */
         public JsonObject listInvitations(String workspaceId) throws SendlyException {
             validateWorkspaceId(workspaceId);
             return client.get("/enterprise/workspaces/" + PathParams.encode(workspaceId) + "/invitations", null);
@@ -517,6 +586,13 @@ public class EnterpriseResource {
             return client.get("/enterprise/analytics/messages", params.isEmpty() ? null : params);
         }
 
+        /**
+         * Delivery statistics for each workspace.
+         *
+         * @return {@code {"data": [...]}}: the API answers with one entry per
+         *         workspace, returned under {@code data}
+         * @throws SendlyException if the request fails
+         */
         public JsonObject delivery() throws SendlyException {
             return client.get("/enterprise/analytics/delivery", null);
         }

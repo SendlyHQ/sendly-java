@@ -4,6 +4,8 @@ import com.sendly.exceptions.AuthenticationException;
 import com.sendly.exceptions.NetworkException;
 import com.sendly.exceptions.RateLimitException;
 import com.sendly.exceptions.SendlyException;
+import com.sendly.exceptions.ValidationException;
+import com.sendly.models.Message;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -286,6 +288,185 @@ class SendlyTest {
 
         // Should not retry insufficient credits errors
         assertEquals(1, mockServer.getRequestCount());
+    }
+
+    // ==================== Non-JSON Response Tests ====================
+
+    private static MockResponse htmlResponse(int code, String html) {
+        return new MockResponse()
+                .setResponseCode(code)
+                .setBody(html)
+                .addHeader("Content-Type", "text/html");
+    }
+
+    @Test
+    void testClient_422_keepsItsStatus() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString()));
+
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(422)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"error\":\"idempotency_key_mismatch\",\"message\":\"This idempotency key was already used with a different request body. Use a new key for different requests.\"}"));
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> client.messages().get("msg_1"));
+
+        assertEquals(422, exception.getStatusCode());
+        assertEquals("idempotency_key_mismatch", exception.getApiErrorCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testClient_400_keepsItsStatus() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString()));
+
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(400)
+                .setHeader("Content-Type", "application/json")
+                .setBody("{\"error\":\"invalid_request\",\"message\":\"to is required\"}"));
+
+        ValidationException exception = assertThrows(ValidationException.class,
+                () -> client.messages().get("msg_1"));
+
+        assertEquals(400, exception.getStatusCode());
+    }
+
+    @Test
+    void testClient_htmlGatewayPage_isRetried() throws Exception {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(1));
+
+        mockServer.enqueue(htmlResponse(502, "<html>Bad gateway</html>"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_1\",\"to\":\"+15551234567\",\"text\":\"Hi\",\"status\":\"delivered\",\"direction\":\"outbound\"}"
+        ));
+
+        Message message = client.messages().get("msg_1");
+
+        assertEquals("msg_1", message.getId());
+        assertEquals(2, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testClient_htmlGatewayPage_surfacesAsSendlyException() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(0));
+
+        mockServer.enqueue(htmlResponse(524, "<!DOCTYPE html>\n<html><title>A timeout occurred</title></html>"));
+
+        SendlyException exception = assertThrows(SendlyException.class, () -> client.messages().get("msg_1"));
+
+        assertEquals(524, exception.getStatusCode());
+        assertTrue(exception.getMessage().startsWith("HTTP 524"), exception.getMessage());
+    }
+
+    @Test
+    void testClient_htmlBlockPage_isThrownAtOnce() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(3));
+
+        mockServer.enqueue(htmlResponse(403,
+            "<!DOCTYPE html>\n<html><head><title>Attention Required! | Cloudflare</title></head>"
+                + "<body><h1>Sorry, you have been blocked</h1></body></html>"));
+
+        SendlyException exception = assertTimeoutPreemptively(Duration.ofSeconds(5),
+            () -> assertThrows(SendlyException.class, () -> client.messages().get("msg_1")));
+
+        assertEquals(403, exception.getStatusCode());
+        assertTrue(exception.getMessage().startsWith("HTTP 403"), exception.getMessage());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testClient_htmlPayloadTooLargePage_isThrownAtOnceOnAPost() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(3));
+
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(413)
+                .setBody("<html><head><title>413 Request Entity Too Large</title></head>"
+                    + "<body><center><h1>413 Request Entity Too Large</h1></center></body></html>")
+                .addHeader("Content-Type", "text/html"));
+
+        SendlyException exception = assertTimeoutPreemptively(Duration.ofSeconds(5),
+            () -> assertThrows(SendlyException.class, () -> client.messages().send("+15551234567", "Test")));
+
+        assertEquals(413, exception.getStatusCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testClient_nonJsonSuccessBody_throwsSendlyExceptionWithoutRetrying() {
+        Sendly client = new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(2));
+
+        mockServer.enqueue(htmlResponse(200, "<html>Welcome</html>"));
+
+        SendlyException exception = assertThrows(SendlyException.class, () -> client.messages().get("msg_1"));
+
+        assertEquals("Invalid JSON response from API", exception.getMessage());
+        assertEquals(200, exception.getStatusCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    // ==================== Null Request Body Tests ====================
+
+    private Sendly apiClient() {
+        return new Sendly("sk_test_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/api/v1").toString())
+                .maxRetries(0));
+    }
+
+    private static MockResponse strictJsonParserRefusal() {
+        return new MockResponse()
+                .setResponseCode(400)
+                .setBody("{\"message\":\"Unexpected token 'n', \\\"null\\\" is not valid JSON\"}")
+                .addHeader("Content-Type", "application/json");
+    }
+
+    @Test
+    void testPost_nullBody_sendsAnEmptyObject() throws Exception {
+        Sendly client = apiClient();
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"id\":\"draft_1\",\"status\":\"approved\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"id\":\"tpl_1\",\"status\":\"published\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"code\":\"abc123\",\"shortUrl\":\"https://sendly.live/l/abc123\"}"));
+
+        client.post("/drafts/draft_1/approve", null);
+        client.request("POST", "/templates/tpl_1/publish", null, com.google.gson.JsonObject.class);
+        client.postUnversioned("/api/links", null);
+
+        for (int i = 0; i < 3; i++) {
+            RecordedRequest request = mockServer.takeRequest();
+            assertEquals("POST", request.getMethod());
+            assertEquals("{}", request.getBody().readUtf8(), request.getPath());
+        }
+    }
+
+    @Test
+    void testPutAndPatch_nullBody_isNotTurnedIntoAnEmptyObject() throws Exception {
+        Sendly client = apiClient();
+        mockServer.enqueue(strictJsonParserRefusal());
+        mockServer.enqueue(strictJsonParserRefusal());
+        mockServer.enqueue(strictJsonParserRefusal());
+        mockServer.enqueue(strictJsonParserRefusal());
+
+        assertThrows(ValidationException.class, () -> client.put("/enterprise/settings/auto-top-up", null));
+        assertThrows(ValidationException.class,
+                () -> client.request("PUT", "/enterprise/settings/auto-top-up", null, com.google.gson.JsonObject.class));
+        assertThrows(ValidationException.class, () -> client.patch("/account/keys/key_1/revoke", null));
+        assertThrows(ValidationException.class, () -> client.patchUnversioned("/api/links/abc123", null));
+
+        for (int i = 0; i < 4; i++) {
+            RecordedRequest request = mockServer.takeRequest();
+            assertEquals("null", request.getBody().readUtf8(), request.getMethod() + " " + request.getPath());
+        }
     }
 
     // ==================== Network Error Tests ====================

@@ -33,8 +33,9 @@ public class AccountResource {
      */
     public Account get() throws SendlyException {
         JsonObject response = client.get("/account", null);
-        JsonObject data = response.has("account") ?
-            response.getAsJsonObject("account") :
+        JsonObject data = response.has("user") && response.get("user").isJsonObject() ?
+            response.getAsJsonObject("user") :
+            response.has("account") ? response.getAsJsonObject("account") :
             response.has("data") ? response.getAsJsonObject("data") : response;
         return new Account(data);
     }

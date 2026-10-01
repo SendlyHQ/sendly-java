@@ -8,6 +8,7 @@ import com.sendly.exceptions.ValidationException;
 import com.sendly.models.*;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -69,10 +70,6 @@ public class WebhooksResource {
         List<Webhook> webhooks = new ArrayList<>();
         if (response.has("data") && response.get("data").isJsonArray()) {
             response.getAsJsonArray("data").forEach(e -> webhooks.add(new Webhook(e.getAsJsonObject())));
-        } else if (response.isJsonArray()) {
-            // Handle array response
-            JsonArray array = client.getGson().fromJson(response.toString(), JsonArray.class);
-            array.forEach(e -> webhooks.add(new Webhook(e.getAsJsonObject())));
         }
         return webhooks;
     }
@@ -163,9 +160,10 @@ public class WebhooksResource {
      *
      * <p>Use when a circuit-breaker outage left events with no audit row
      * (the case {@link #redeliver(String, RedeliverOptions)} cannot
-     * recover). Synthesized events have fresh IDs; clients should dedupe
-     * by event.data.object.id (the message ID). Rejects with HTTP 409 if
-     * the circuit is currently open — call
+     * recover). Synthesized message events carry the same event id the
+     * original dispatch used, so dedupe on event.id. Do not dedupe on
+     * data.object.id: a message's sent and delivered events share it.
+     * Rejects with HTTP 409 if the circuit is currently open — call
      * {@link #resetCircuit(String)} first.
      *
      * @param webhookId Webhook ID
@@ -258,14 +256,37 @@ public class WebhooksResource {
     }
 
     /**
-     * Get delivery history for a webhook.
+     * Get delivery history for a webhook, newest first.
      */
     public List<WebhookDelivery> getDeliveries(String webhookId) throws SendlyException {
+        return getDeliveries(webhookId, null, null, null);
+    }
+
+    /**
+     * Get a page of a webhook's delivery history, newest first.
+     *
+     * @param webhookId Webhook ID
+     * @param limit     Maximum deliveries to return (1-100, default 50), or null
+     * @param offset    Number of deliveries to skip, or null
+     * @param status    Only deliveries with this status ({@code pending},
+     *                  {@code delivered}, {@code failed} or {@code cancelled}),
+     *                  or null for all
+     * @return The deliveries
+     * @throws SendlyException if the request fails
+     */
+    public List<WebhookDelivery> getDeliveries(String webhookId, Integer limit, Integer offset, String status) throws SendlyException {
         validateWebhookId(webhookId);
-        JsonObject response = client.get("/webhooks/" + PathParams.encode(webhookId) + "/deliveries", null);
+        Map<String, String> params = new HashMap<>();
+        if (limit != null) params.put("limit", String.valueOf(limit));
+        if (offset != null) params.put("offset", String.valueOf(offset));
+        if (status != null) params.put("status", status);
+
+        JsonObject response = client.get("/webhooks/" + PathParams.encode(webhookId) + "/deliveries",
+                params.isEmpty() ? null : params);
+        String key = response.has("deliveries") && response.get("deliveries").isJsonArray() ? "deliveries" : "data";
         List<WebhookDelivery> deliveries = new ArrayList<>();
-        if (response.has("data") && response.get("data").isJsonArray()) {
-            response.getAsJsonArray("data").forEach(e -> deliveries.add(new WebhookDelivery(e.getAsJsonObject())));
+        if (response.has(key) && response.get(key).isJsonArray()) {
+            response.getAsJsonArray(key).forEach(e -> deliveries.add(new WebhookDelivery(e.getAsJsonObject())));
         }
         return deliveries;
     }

@@ -7,6 +7,7 @@ import com.sendly.TestHelpers;
 import com.sendly.exceptions.*;
 import com.sendly.models.Call;
 import com.sendly.models.CallBilling;
+import com.sendly.models.CallChannel;
 import com.sendly.models.CallDirection;
 import com.sendly.models.CallErrorCode;
 import com.sendly.models.CallHandledBy;
@@ -414,6 +415,25 @@ class CallsTest {
         assertEquals(CallHandledBy.DASHBOARD, call.getHandledBy());
         assertNull(call.getTranscript());
         assertEquals("caller_hung_up", call.getHangupClass());
+    }
+
+    @Test
+    void testGet_channel_parsesEachValue() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            DASHBOARD_CALL_JSON.replace("\"kind\":\"pstn\",", "\"kind\":\"pstn\",\"channel\":\"whatsapp\",")));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            RINGING_CALL_JSON.replace("\"kind\":\"pstn\",", "\"kind\":\"pstn\",\"channel\":\"phone\",")));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            DASHBOARD_CALL_JSON.replace("\"kind\":\"pstn\",", "\"kind\":\"internal\",\"channel\":\"browser\",")));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            DASHBOARD_CALL_JSON.replace("\"kind\":\"pstn\",", "\"kind\":\"pstn\",\"channel\":\"satellite\",")));
+        mockServer.enqueue(TestHelpers.mockSuccess(DASHBOARD_CALL_JSON));
+
+        assertEquals(CallChannel.WHATSAPP, client.calls().get("call_dash_1").getChannel());
+        assertEquals(CallChannel.PHONE, client.calls().get(CALL_ID).getChannel());
+        assertEquals(CallChannel.BROWSER, client.calls().get("call_dash_1").getChannel());
+        assertEquals("satellite", client.calls().get("call_dash_1").getChannel());
+        assertNull(client.calls().get("call_dash_1").getChannel());
     }
 
     @Test

@@ -8,9 +8,6 @@ import com.sendly.models.ShortLink;
 import com.sendly.models.ShortLinkDisabledResponse;
 import com.sendly.models.ShortLinkListResponse;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -136,11 +133,6 @@ public class LinksResource {
     }
 
     private String encodePathParam(String param) {
-        try {
-            return URLEncoder.encode(param, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-            // UTF-8 is always supported, this should never happen
-            return param;
-        }
+        return PathParams.encode(param);
     }
 }

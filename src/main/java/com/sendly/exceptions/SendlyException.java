@@ -84,8 +84,9 @@ public class SendlyException extends RuntimeException {
 
     /**
      * The API response body this error was mapped from, or null when the
-     * error did not come from an API response (a network failure, or a
-     * refusal raised client-side). Use it for fields beyond {@code error} and
+     * error did not come from an API response (a network failure, a refusal
+     * raised client-side, or a body that is not a JSON object, such as an
+     * HTML error page from a proxy). Use it for fields beyond {@code error} and
      * {@code message}: the {@code numbers} still answering with an agent on
      * 409 {@code agent_in_use}, or the {@code suggested} address on 422
      * {@code invalid_address}.

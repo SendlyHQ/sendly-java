@@ -30,6 +30,7 @@ public class Account {
 
     public String getId() { return id; }
     public String getEmail() { return email; }
+    /** The account endpoint does not send a name, so this is null. */
     public String getName() { return name; }
     public String getCreatedAt() { return createdAt; }
 

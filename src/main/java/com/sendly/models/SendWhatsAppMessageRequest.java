@@ -19,8 +19,9 @@ import java.util.Map;
  *       window</li>
  * </ul>
  * <p>
- * WhatsApp sends require a live API key and a {@code from} number that has
- * been connected to WhatsApp (see {@code whatsapp().signup()}).
+ * WhatsApp sends require the {@code sms:send} scope, a live API key and a
+ * {@code from} number that has been connected to WhatsApp (see
+ * {@code whatsapp().signup()}).
  * </p>
  */
 public class SendWhatsAppMessageRequest {

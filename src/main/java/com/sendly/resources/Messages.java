@@ -29,9 +29,6 @@ import com.sendly.models.SendRcsMessageRequest;
 import com.sendly.models.SendWhatsAppMessageRequest;
 import com.sendly.models.WhatsAppMessage;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -104,8 +101,11 @@ public class Messages {
     /**
      * Send a WhatsApp message.
      * <p>
-     * Requires a live API key and a {@code from} number with an active
-     * WhatsApp connection (see {@code whatsapp().signup()}). Free-form
+     * Requires the {@code sms:send} scope (not {@code whatsapp:write}), a
+     * live API key and a {@code from} number with an active WhatsApp
+     * connection (see {@code whatsapp().signup()}). WhatsApp is enabled per
+     * person (the user who owns the API key, not the workspace); while it is
+     * off the API responds 403 {@code whatsapp_not_enabled}. Free-form
      * {@code text} and media only deliver inside an open 24-hour
      * customer-service window — outside it, send an approved {@code template}
      * instead (check with {@code whatsapp().window(from, to)}).
@@ -113,7 +113,19 @@ public class Messages {
      *
      * @param request WhatsApp message details (text, media + caption, or template)
      * @return The created WhatsApp message
-     * @throws SendlyException if the request fails
+     * @throws SendlyException if the request fails; {@code whatsapp_send_failed}
+     *         is a 422 {@code ValidationException} when WhatsApp refused the
+     *         message (final, not retried; cached under the idempotency key
+     *         and replayed for 24 hours) and a 502 when the message provably
+     *         never reached the carrier, so it was not sent and is safe to
+     *         send again (never cached; retried like any 5xx under the same
+     *         idempotency key); neither is charged. A 409
+     *         {@code whatsapp_send_unconfirmed} means the outcome is unknown:
+     *         the message was marked failed and refunded but may still be
+     *         delivered, so check before sending it again (it could arrive
+     *         twice). It is cached under the idempotency key and is thrown on
+     *         the first attempt, never retried automatically. No send returns
+     *         503 {@code whatsapp_unavailable}.
      */
     public WhatsAppMessage send(SendWhatsAppMessageRequest request) throws SendlyException {
         return send(request, null);
@@ -327,7 +339,8 @@ public class Messages {
     /**
      * Iterate over all messages with automatic pagination.
      *
-     * @param request List options (status, to filters)
+     * @param request List options: the status, to and direction filters apply
+     *                to every page; limit and offset are ignored
      * @return Iterable over all messages
      */
     public Iterable<Message> each(ListMessagesRequest request) {
@@ -403,7 +416,7 @@ public class Messages {
      */
     public ScheduledMessageList listScheduled(ListScheduledMessagesRequest request) throws SendlyException {
         JsonObject response = client.get("/messages/scheduled", request.toParams());
-        return new ScheduledMessageList(response);
+        return new ScheduledMessageList(response, request);
     }
 
     /**
@@ -585,12 +598,7 @@ public class Messages {
     }
 
     private String encodePathParam(String param) {
-        try {
-            return URLEncoder.encode(param, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-            // UTF-8 is always supported, this should never happen
-            return param;
-        }
+        return PathParams.encode(param);
     }
 
     /**
@@ -598,8 +606,7 @@ public class Messages {
      */
     private static class MessageIterator implements Iterator<Message> {
         private final Messages messages;
-        private final String status;
-        private final String to;
+        private final Map<String, String> filters;
         private final int batchSize;
 
         private MessageList currentPage;
@@ -608,8 +615,7 @@ public class Messages {
 
         MessageIterator(Messages messages, ListMessagesRequest request) {
             this.messages = messages;
-            this.status = null; // Extract from request if needed
-            this.to = null;
+            this.filters = request != null ? request.toParams() : new HashMap<>();
             this.batchSize = 100;
             this.offset = 0;
             fetchNextPage();
@@ -621,8 +627,9 @@ public class Messages {
                     ListMessagesRequest.builder()
                         .limit(batchSize)
                         .offset(offset)
-                        .status(status)
-                        .to(to)
+                        .status(filters.get("status"))
+                        .to(filters.get("to"))
+                        .direction(filters.get("direction"))
                         .build()
                 );
                 pageIterator = currentPage.iterator();

@@ -20,8 +20,18 @@ public class CancelScheduledMessageResponse {
     public CancelScheduledMessageResponse(JsonObject json) {
         this.id = getStringOrNull(json, "id");
         this.status = getStringOrNull(json, "status");
-        this.creditsRefunded = json.has("credits_refunded") ? json.get("credits_refunded").getAsInt() : 0;
-        this.cancelledAt = parseInstant(getStringOrNull(json, "cancelled_at"));
+        this.creditsRefunded = getIntOrZero(json, "creditsRefunded", "credits_refunded");
+        String cancelled = getStringOrNull(json, "cancelledAt");
+        this.cancelledAt = parseInstant(cancelled != null ? cancelled : getStringOrNull(json, "cancelled_at"));
+    }
+
+    private int getIntOrZero(JsonObject json, String key, String fallbackKey) {
+        for (String k : new String[] {key, fallbackKey}) {
+            if (json.has(k) && !json.get(k).isJsonNull()) {
+                return json.get(k).getAsInt();
+            }
+        }
+        return 0;
     }
 
     private String getStringOrNull(JsonObject json, String key) {
@@ -49,6 +59,11 @@ public class CancelScheduledMessageResponse {
         return creditsRefunded;
     }
 
+    /**
+     * When the message was cancelled. The cancel response does not carry
+     * this, so it is null on {@code messages().cancelScheduled(id)}; read
+     * {@code getCancelledAt()} from {@code messages().getScheduled(id)}.
+     */
     public Instant getCancelledAt() {
         return cancelledAt;
     }

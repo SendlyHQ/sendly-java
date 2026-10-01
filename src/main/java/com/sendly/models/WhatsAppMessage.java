@@ -101,7 +101,9 @@ public class WhatsAppMessage {
     public String getFrom() { return from; }
 
     /**
-     * Body text for free-form text sends; null for template and media sends.
+     * Body text for free-form text sends, or the caption for media sends
+     * (pass it as {@code text} with {@code mediaUrls}); null for template
+     * sends and for media sent without a caption.
      */
     public String getText() { return text; }
 
@@ -112,8 +114,14 @@ public class WhatsAppMessage {
     public int getSegments() { return segments; }
 
     /**
-     * Credits charged for this message (priced by destination country and
-     * category).
+     * Credits charged for this message. Free-form text or media inside the
+     * 24-hour window: 1 credit each for the first 1,000 per sending number
+     * per calendar month (UTC), then the destination's utility template
+     * price; countries without a listed price use the default utility price
+     * of 12 credits. Templates are priced by category and destination
+     * country; countries without a listed price use 33 (marketing), 12
+     * (utility) and 12 (authentication) credits. A failed send gives its
+     * slot back.
      */
     public int getCreditsUsed() { return creditsUsed; }
 

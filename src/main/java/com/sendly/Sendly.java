@@ -26,14 +26,19 @@ import com.sendly.resources.RcsResource;
 import com.sendly.resources.CallsResource;
 import com.sendly.resources.VoiceResource;
 import okhttp3.*;
+import okio.BufferedSink;
 
 import com.google.gson.JsonElement;
+import com.google.gson.JsonParseException;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -55,6 +60,11 @@ public class Sendly {
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
     private static final Pattern PRINTABLE_ASCII_PATTERN = Pattern.compile("^[\\x20-\\x7E]+$");
+    private static final int MAX_RATE_LIMIT_WAIT_SECONDS = 60;
+    private static final Set<String> RETRYABLE_RATE_LIMIT_CODES = Set.of(
+            "rate_limit_exceeded", "rate_limited", "too_many_concurrent_verifications", "provision_rate_limit");
+    private static final Set<String> FINAL_ERROR_CODES = Set.of(
+            "whatsapp_send_unconfirmed", "whatsapp_verification_failed");
 
     private final String apiKey;
     private final String baseUrl;
@@ -355,7 +365,7 @@ public class Sendly {
      *
      * @param method HTTP method (GET, POST, PATCH, DELETE)
      * @param path   API endpoint path
-     * @param body   Request body (can be null)
+     * @param body   Request body (can be null; a POST then sends {@code {}})
      * @param clazz  Response class type
      * @return Typed response object
      * @throws SendlyException if the request fails
@@ -389,6 +399,10 @@ public class Sendly {
 
     /**
      * Make a GET request.
+     * <p>
+     * A response whose body is a JSON array is returned as
+     * {@code {"data": [...]}}, and an empty body as an empty object.
+     * </p>
      *
      * @param path   API endpoint path
      * @param params Query parameters
@@ -472,16 +486,36 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject post(String path, Object body, String idempotencyKey, boolean autoIdempotencyKey) throws SendlyException {
+        return post(path, body, idempotencyKey, autoIdempotencyKey, true);
+    }
+
+    /**
+     * Make a POST request with control over key auto-generation and retries.
+     *
+     * @param path               API endpoint path
+     * @param body               Request body
+     * @param idempotencyKey     Caller-supplied idempotency key (may be null)
+     * @param autoIdempotencyKey Set to false to skip auto-generating an
+     *                           idempotency key
+     * @param retryErrors        Set to false for a request that must not be
+     *                           repeated automatically: only a 429 rate limit
+     *                           is retried, and a 5xx, any other 4xx or a
+     *                           network error is thrown on the first attempt
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject post(String path, Object body, String idempotencyKey, boolean autoIdempotencyKey,
+                           boolean retryErrors) throws SendlyException {
         String callerKey = normalizeIdempotencyKey(idempotencyKey);
         String key = callerKey != null ? callerKey
                 : autoIdempotencyKey ? generateIdempotencyKey() : null;
 
-        String json = gson.toJson(body);
+        String json = body == null ? "{}" : gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
         Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
-                .post(requestBody)
+                .post(retryErrors ? requestBody : oneShot(requestBody))
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Content-Type", "application/json")
                 .addHeader("Accept", "application/json")
@@ -493,7 +527,7 @@ public class Sendly {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build(), callerKey == null && key != null);
+        return executeWithRetry(reqBuilder.build(), retryErrors);
     }
 
     /**
@@ -553,9 +587,25 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject postMultipart(String path, RequestBody requestBody) throws SendlyException {
+        return postMultipart(path, requestBody, true);
+    }
+
+    /**
+     * Make a multipart POST request with control over retries.
+     *
+     * @param path        API endpoint path
+     * @param requestBody OkHttp RequestBody (multipart)
+     * @param retryErrors Set to false for a request that must not be repeated
+     *                    automatically: only a 429 rate limit is retried, and
+     *                    a 5xx, any other 4xx or a network error is thrown on
+     *                    the first attempt
+     * @return Response as JsonObject
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject postMultipart(String path, RequestBody requestBody, boolean retryErrors) throws SendlyException {
         Request.Builder reqBuilder = new Request.Builder()
                 .url(baseUrl + path)
-                .post(requestBody)
+                .post(retryErrors ? requestBody : oneShot(requestBody))
                 .addHeader("Authorization", "Bearer " + apiKey)
                 .addHeader("Accept", "application/json")
                 .addHeader("User-Agent", "sendly-java/" + VERSION)
@@ -564,7 +614,7 @@ public class Sendly {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build(), true);
+        return executeWithRetry(reqBuilder.build(), retryErrors);
     }
 
     /**
@@ -712,7 +762,7 @@ public class Sendly {
      * @throws SendlyException if the request fails
      */
     public JsonObject postUnversioned(String path, Object body) throws SendlyException {
-        String json = gson.toJson(body);
+        String json = body == null ? "{}" : gson.toJson(body);
         RequestBody requestBody = RequestBody.create(json, MediaType.parse("application/json"));
 
         Request.Builder reqBuilder = new Request.Builder()
@@ -727,7 +777,7 @@ public class Sendly {
             reqBuilder.addHeader("X-Organization-Id", organizationId);
         }
 
-        return executeWithRetry(reqBuilder.build(), true);
+        return executeWithRetry(reqBuilder.build());
     }
 
     /**
@@ -760,18 +810,15 @@ public class Sendly {
      * Execute request with retries.
      */
     private JsonObject executeWithRetry(Request request) throws SendlyException {
-        return executeWithRetry(request, false);
+        return executeWithRetry(request, true);
     }
 
-    /**
-     * Execute request with retries, optionally rotating an auto-generated
-     * idempotency key between attempts.
-     */
-    private JsonObject executeWithRetry(Request request, boolean autoIdempotencyKey) throws SendlyException {
+    private JsonObject executeWithRetry(Request request, boolean retryErrors) throws SendlyException {
         SendlyException lastException = null;
+        boolean waitedOut = false;
 
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
-            if (attempt > 0) {
+            if (attempt > 0 && !waitedOut) {
                 try {
                     long delay = (long) Math.pow(2, attempt - 1) * 1000;
                     Thread.sleep(delay);
@@ -780,6 +827,7 @@ public class Sendly {
                     throw new NetworkException("Request interrupted");
                 }
             }
+            waitedOut = false;
 
             try {
                 return execute(request);
@@ -787,25 +835,26 @@ public class Sendly {
                      NotFoundException | InsufficientCreditsException e) {
                 throw e; // Don't retry these
             } catch (RateLimitException e) {
+                if (attempt == maxRetries || !isRetryable(e)) {
+                    throw e;
+                }
                 if (e.getRetryAfter() > 0) {
                     try {
                         Thread.sleep(e.getRetryAfter() * 1000L);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
+                        throw new NetworkException("Request interrupted");
                     }
+                    waitedOut = true;
                 }
                 lastException = e;
             } catch (SendlyException e) {
-                // A 5xx means the server responded (and may have cached that
-                // response under the key), so an auto-generated key is rotated
-                // to let the retry re-execute. Timeouts and network errors
-                // leave the outcome unknown — the key is kept so the server
-                // can dedupe a request that actually went through.
-                // Caller-supplied keys are never rotated.
-                if (autoIdempotencyKey && e.getStatusCode() >= 500) {
-                    request = request.newBuilder()
-                            .header("Idempotency-Key", generateIdempotencyKey())
-                            .build();
+                int status = e.getStatusCode();
+                if (!retryErrors
+                        || status >= 200 && status < 300
+                        || status >= 400 && status < 500 && e.getResponseBody() == null
+                        || e.getApiErrorCode() != null && FINAL_ERROR_CODES.contains(e.getApiErrorCode())) {
+                    throw e;
                 }
                 lastException = e;
             }
@@ -821,6 +870,30 @@ public class Sendly {
      */
     private static String generateIdempotencyKey() {
         return "sendly-java-retry-" + UUID.randomUUID();
+    }
+
+    private static RequestBody oneShot(RequestBody body) {
+        return new RequestBody() {
+            @Override
+            public MediaType contentType() {
+                return body.contentType();
+            }
+
+            @Override
+            public long contentLength() throws IOException {
+                return body.contentLength();
+            }
+
+            @Override
+            public void writeTo(BufferedSink sink) throws IOException {
+                body.writeTo(sink);
+            }
+
+            @Override
+            public boolean isOneShot() {
+                return true;
+            }
+        };
     }
 
     /**
@@ -851,28 +924,98 @@ public class Sendly {
             String body = response.body() != null ? response.body().string() : "";
 
             if (response.isSuccessful()) {
-                return body.isEmpty() ? new JsonObject() : gson.fromJson(body, JsonObject.class);
+                try {
+                    return objectOf(JsonParser.parseString(body));
+                } catch (JsonParseException | IllegalStateException e) {
+                    throw new SendlyException("Invalid JSON response from API", response.code());
+                }
             }
 
-            JsonObject error = body.isEmpty() ? new JsonObject() : gson.fromJson(body, JsonObject.class);
-            String message = error.has("message") ? error.get("message").getAsString() : "Unknown error";
+            JsonObject parsed = errorObjectOf(body);
+            JsonObject error = parsed != null ? parsed : new JsonObject();
+            String message = parsed == null
+                    ? "HTTP " + response.code() + ": " + snippetOf(body)
+                    : errorMessageOf(error, response.code());
 
             SendlyException mapped = switch (response.code()) {
                 case 401 -> new AuthenticationException(message);
                 case 402 -> new InsufficientCreditsException(message);
                 case 404 -> new NotFoundException(message);
-                case 429 -> {
-                    String retryAfter = response.header("Retry-After");
-                    int seconds = retryAfter != null ? Integer.parseInt(retryAfter) : 0;
-                    yield new RateLimitException(message, seconds);
-                }
-                case 400, 422 -> new ValidationException(message);
+                case 429 -> new RateLimitException(message, retryAfterOf(response, error), apiErrorCodeOf(error));
+                case 400, 422 -> new ValidationException(message, response.code());
                 default -> new SendlyException(message, response.code());
             };
-            throw mapped.withApiError(apiErrorCodeOf(error), fieldErrorsOf(error)).withResponseBody(error);
+            throw mapped.withApiError(apiErrorCodeOf(error), fieldErrorsOf(error)).withResponseBody(parsed);
         } catch (IOException e) {
             throw new NetworkException("Request failed: " + e.getMessage());
         }
+    }
+
+    private static boolean isRetryable(RateLimitException e) {
+        String code = e.getApiErrorCode();
+        boolean transientCode = code == null || RETRYABLE_RATE_LIMIT_CODES.contains(code);
+        return transientCode && e.getRetryAfter() <= MAX_RATE_LIMIT_WAIT_SECONDS;
+    }
+
+    private static int retryAfterOf(Response response, JsonObject error) {
+        String header = response.header("Retry-After");
+        if (header != null) {
+            try {
+                return Math.max(0, Integer.parseInt(header.trim()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        JsonElement body = error.get("retryAfter");
+        if (body != null && body.isJsonPrimitive()) {
+            try {
+                return Math.max(0, (int) Math.ceil(body.getAsDouble()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return 0;
+    }
+
+    private static JsonObject errorObjectOf(String body) {
+        if (body.trim().isEmpty()) {
+            return new JsonObject();
+        }
+        try {
+            JsonElement element = JsonParser.parseString(body);
+            return element.isJsonObject() ? element.getAsJsonObject() : null;
+        } catch (JsonParseException e) {
+            return null;
+        }
+    }
+
+    private static String errorMessageOf(JsonObject error, int status) {
+        for (String key : new String[] {"message", "error"}) {
+            JsonElement value = error.get(key);
+            if (value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString()
+                    && !value.getAsString().isEmpty()) {
+                return value.getAsString();
+            }
+        }
+        return "HTTP " + status;
+    }
+
+    private static String snippetOf(String body) {
+        String collapsed = body.replaceAll("\\s+", " ").trim();
+        return collapsed.length() > 200 ? collapsed.substring(0, 200) + "..." : collapsed;
+    }
+
+    private static JsonObject objectOf(JsonElement element) {
+        if (element.isJsonObject()) {
+            return element.getAsJsonObject();
+        }
+        if (element.isJsonNull()) {
+            return new JsonObject();
+        }
+        if (element.isJsonArray()) {
+            JsonObject wrapped = new JsonObject();
+            wrapped.add("data", element);
+            return wrapped;
+        }
+        throw new JsonSyntaxException("Expected a JSON object or array but was " + element);
     }
 
     private static String apiErrorCodeOf(JsonObject error) {

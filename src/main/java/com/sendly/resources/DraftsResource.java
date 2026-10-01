@@ -152,7 +152,7 @@ public class DraftsResource {
             throw new ValidationException("Draft ID is required");
         }
 
-        return client.request("POST", "/drafts/" + PathParams.encode(id) + "/approve", null, Draft.class);
+        return client.request("POST", "/drafts/" + PathParams.encode(id) + "/approve", new HashMap<>(), Draft.class);
     }
 
     /**

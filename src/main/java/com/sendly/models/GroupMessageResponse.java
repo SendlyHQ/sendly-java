@@ -1,6 +1,7 @@
 package com.sendly.models;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
@@ -13,6 +14,7 @@ public class GroupMessageResponse {
     private final String id;
     private final String status;
     private final List<String> to;
+    private final List<GroupRecipient> recipients;
     private final String groupMessageId;
     private final boolean simulated;
     private final String message;
@@ -29,11 +31,19 @@ public class GroupMessageResponse {
         this.message = getStringOrNull(json, "message");
 
         this.to = new ArrayList<>();
+        this.recipients = new ArrayList<>();
         if (json.has("to") && json.get("to").isJsonArray()) {
             JsonArray toArray = json.getAsJsonArray("to");
             for (int i = 0; i < toArray.size(); i++) {
-                if (!toArray.get(i).isJsonNull()) {
-                    to.add(toArray.get(i).getAsString());
+                JsonElement entry = toArray.get(i);
+                if (entry.isJsonObject()) {
+                    GroupRecipient recipient = new GroupRecipient(entry.getAsJsonObject());
+                    recipients.add(recipient);
+                    if (recipient.getPhoneNumber() != null) {
+                        to.add(recipient.getPhoneNumber());
+                    }
+                } else if (entry.isJsonPrimitive()) {
+                    to.add(entry.getAsString());
                 }
             }
         }
@@ -63,6 +73,14 @@ public class GroupMessageResponse {
 
     public List<String> getTo() {
         return to;
+    }
+
+    /**
+     * Each recipient with its status. A live send fills this; a simulated
+     * send lists only phone numbers, so it is empty.
+     */
+    public List<GroupRecipient> getRecipients() {
+        return recipients;
     }
 
     public String getGroupMessageId() {

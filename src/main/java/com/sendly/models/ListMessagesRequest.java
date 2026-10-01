@@ -11,12 +11,14 @@ public class ListMessagesRequest {
     private final Integer offset;
     private final String status;
     private final String to;
+    private final String direction;
 
     private ListMessagesRequest(Builder builder) {
         this.limit = builder.limit;
         this.offset = builder.offset;
         this.status = builder.status;
         this.to = builder.to;
+        this.direction = builder.direction;
     }
 
     /**
@@ -36,6 +38,9 @@ public class ListMessagesRequest {
         if (to != null) {
             params.put("to", to);
         }
+        if (direction != null) {
+            params.put("direction", direction);
+        }
         return params;
     }
 
@@ -54,6 +59,7 @@ public class ListMessagesRequest {
         private Integer offset;
         private String status;
         private String to;
+        private String direction;
 
         public Builder limit(int limit) {
             this.limit = limit;
@@ -72,6 +78,15 @@ public class ListMessagesRequest {
 
         public Builder to(String to) {
             this.to = to;
+            return this;
+        }
+
+        /**
+         * Only messages in this direction: {@code inbound} or
+         * {@code outbound}. Any other value lists both.
+         */
+        public Builder direction(String direction) {
+            this.direction = direction;
             return this;
         }
 

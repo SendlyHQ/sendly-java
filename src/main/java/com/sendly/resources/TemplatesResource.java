@@ -61,7 +61,7 @@ public class TemplatesResource {
      * Publish a draft template.
      */
     public Template publish(String templateId) throws SendlyException {
-        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/publish", null, Template.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/publish", new HashMap<>(), Template.class);
     }
 
     /**
@@ -86,7 +86,7 @@ public class TemplatesResource {
      * Clone a template.
      */
     public Template clone(String templateId) throws SendlyException {
-        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/clone", null, Template.class);
+        return client.request("POST", "/templates/" + PathParams.encode(templateId) + "/clone", new HashMap<>(), Template.class);
     }
 
     /**

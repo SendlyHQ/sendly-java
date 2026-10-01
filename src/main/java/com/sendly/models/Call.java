@@ -23,6 +23,7 @@ public class Call {
     private final String id;
     private final String object;
     private final String kind;
+    private final String channel;
     private final String direction;
     private final String status;
     private final String handledBy;
@@ -49,6 +50,7 @@ public class Call {
         this.id = getStringOrNull(json, "id");
         this.object = getStringOrNull(json, "object");
         this.kind = getStringOrNull(json, "kind");
+        this.channel = getStringOrNull(json, "channel");
         this.direction = getStringOrNull(json, "direction");
         this.status = getStringOrNull(json, "status");
         this.handledBy = getStringOrNull(json, "handledBy");
@@ -112,6 +114,15 @@ public class Call {
     /** {@code "pstn"} for a phone call, {@code "internal"} for a browser call between teammates; see {@link CallKind}. */
     public String getKind() {
         return kind;
+    }
+
+    /**
+     * {@code "phone"}, {@code "whatsapp"} or {@code "browser"}; see
+     * {@link CallChannel}. An unknown value is returned as sent, and
+     * {@code null} when the API sends none.
+     */
+    public String getChannel() {
+        return channel;
     }
 
     /** {@code "inbound"} or {@code "outbound"}; see {@link CallDirection}. */

@@ -19,8 +19,6 @@ import com.sendly.models.RcsTestDeviceInput;
 import com.sendly.models.RcsTestDevicesResponse;
 import com.sendly.models.UpdateRcsAgentRequest;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -586,6 +584,6 @@ public class RcsResource {
     }
 
     private static String encode(String s) {
-        return URLEncoder.encode(s, StandardCharsets.UTF_8);
+        return PathParams.encode(s);
     }
 }

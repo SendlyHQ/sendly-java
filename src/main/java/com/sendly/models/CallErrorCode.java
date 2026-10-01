@@ -55,6 +55,8 @@ public final class CallErrorCode {
     public static final String INVALID_REQUEST = "invalid_request";
     /** 400: the workspace has more than one voice-enabled number; choose {@code from}. */
     public static final String FROM_NUMBER_REQUIRED = "from_number_required";
+    /** 400: calls can only be placed from US and Canadian numbers. */
+    public static final String FROM_NUMBER_NOT_SUPPORTED = "from_number_not_supported";
     /** 409: enable voice on one of your numbers first. */
     public static final String NO_VOICE_NUMBER = "no_voice_number";
     /** 404: the number (a call's {@code from}, or the number you are configuring) is not active in your workspace. */
@@ -69,6 +71,14 @@ public final class CallErrorCode {
     public static final String DAILY_CALL_LIMIT = "daily_call_limit";
     /** 429: too many calls placed in the last minute. */
     public static final String RATE_LIMIT_EXCEEDED = "rate_limit_exceeded";
+    /**
+     * 429: this address has sent too many invalid API keys, so the key is
+     * wrong. Never retried automatically; {@code getRetryAfter()} says when
+     * the lockout ends.
+     */
+    public static final String TOO_MANY_FAILED_KEY_ATTEMPTS = "too_many_failed_key_attempts";
+    /** 429: too many API key checks are already running; retried automatically after a second. */
+    public static final String TOO_MANY_CONCURRENT_VERIFICATIONS = "too_many_concurrent_verifications";
     /** 404: no call with that id is in this workspace. */
     public static final String CALL_NOT_FOUND = "call_not_found";
     /** 403: phone calls and voice changes need a live API key. */

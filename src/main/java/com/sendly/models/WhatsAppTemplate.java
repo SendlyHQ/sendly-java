@@ -78,8 +78,9 @@ public class WhatsAppTemplate {
     public String getCategory() { return category; }
 
     /**
-     * Review status: {@code PENDING}, {@code APPROVED}, {@code REJECTED},
-     * {@code PAUSED}, or {@code DISABLED}.
+     * Review status, for example {@code PENDING}, {@code APPROVED},
+     * {@code REJECTED}, {@code PAUSED}, or {@code DISABLED}. Meta may report
+     * other statuses; they come through in uppercase.
      */
     public String getStatus() { return status; }
 

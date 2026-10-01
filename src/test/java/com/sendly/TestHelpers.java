@@ -101,43 +101,48 @@ public class TestHelpers {
             ));
         }
         json.append("],\"pagination\":{\"total\":100,\"limit\":20,\"offset\":").append(offset)
-            .append(",\"has_more\":").append(hasMore).append("}}");
+            .append(",\"hasMore\":").append(hasMore).append("}}");
         return json.toString();
     }
 
     /**
-     * Create a JSON response for a scheduled message.
+     * Create a JSON response for a scheduled message, as POST /messages/schedule
+     * and GET /messages/scheduled/:id send it: the row itself, camelCase keys.
      */
     public static String scheduledMessageJson(String id, String to, String text, String scheduledAt) {
         return String.format(
-            "{\"data\":{\"id\":\"%s\",\"to\":\"%s\",\"text\":\"%s\",\"status\":\"scheduled\",\"scheduled_at\":\"%s\",\"credits_reserved\":1,\"created_at\":\"2025-01-15T10:00:00.000Z\"}}",
+            "{\"id\":\"%s\",\"to\":\"%s\",\"text\":\"%s\",\"scheduledAt\":\"%s\",\"timezone\":\"UTC\",\"status\":\"scheduled\","
+                + "\"creditsReserved\":1,\"segments\":1,\"senderType\":\"number_pool\",\"createdAt\":\"2025-01-15T10:00:00.000Z\"}",
             id, to, text, scheduledAt
         );
     }
 
     /**
-     * Create a JSON response for a list of scheduled messages.
+     * Create a JSON response for a list of scheduled messages, as
+     * GET /messages/scheduled sends it: {@code {data, count}}.
      */
-    public static String scheduledMessageListJson(int count, int offset, boolean hasMore) {
+    public static String scheduledMessageListJson(int count, int offset) {
         StringBuilder json = new StringBuilder("{\"data\":[");
         for (int i = 0; i < count; i++) {
             if (i > 0) json.append(",");
             json.append(String.format(
-                "{\"id\":\"sch_%d\",\"to\":\"+15551234567\",\"text\":\"Test %d\",\"status\":\"scheduled\",\"scheduled_at\":\"2025-01-20T10:00:00.000Z\",\"credits_reserved\":1,\"created_at\":\"2025-01-15T10:00:00.000Z\"}",
+                "{\"id\":\"sch_%d\",\"to\":\"+15551234567\",\"text\":\"Test %d\",\"scheduledAt\":\"2025-01-20T10:00:00.000Z\","
+                    + "\"timezone\":\"UTC\",\"status\":\"scheduled\",\"creditsReserved\":1,\"segments\":1,"
+                    + "\"senderType\":\"number_pool\",\"createdAt\":\"2025-01-15T10:00:00.000Z\",\"metadata\":{}}",
                 offset + i, i
             ));
         }
-        json.append("],\"total\":50,\"limit\":20,\"offset\":").append(offset)
-            .append(",\"has_more\":").append(hasMore).append("}");
+        json.append("],\"count\":").append(count).append("}");
         return json.toString();
     }
 
     /**
-     * Create a JSON response for cancelling a scheduled message.
+     * Create a JSON response for cancelling a scheduled message, as
+     * DELETE /messages/scheduled/:id sends it.
      */
     public static String cancelScheduledJson(String id, int creditsRefunded) {
         return String.format(
-            "{\"id\":\"%s\",\"status\":\"cancelled\",\"credits_refunded\":%d,\"cancelled_at\":\"2025-01-15T10:00:00.000Z\"}",
+            "{\"id\":\"%s\",\"status\":\"cancelled\",\"creditsRefunded\":%d}",
             id, creditsRefunded
         );
     }

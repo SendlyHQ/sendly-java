@@ -500,6 +500,159 @@ class MessagesBatchTest {
         assertEquals("batch_2", list.getData().get(2).getBatchId());
     }
 
+    // ==================== previewBatch() Wire Shape Tests ====================
+
+    private static SendBatchRequest twoMessages() {
+        return new SendBatchRequest(Arrays.asList(
+            new BatchMessageItem("+15551234567", "Message 1"),
+            new BatchMessageItem("+15551234568", "Message 2")
+        ));
+    }
+
+    private static String previewJson(String overrides) {
+        return "{\"total\":2,\"sendable\":2,\"blocked\":0,\"duplicates\":0,\"creditsNeeded\":4,\"creditBalance\":100,"
+            + "\"hasSufficientCredits\":true,\"pooled\":false,\"keyType\":\"live\",\"keyScopes\":[\"sms:send\"],"
+            + "\"hasWriteScope\":true,\"messagingProfile\":{\"id\":\"mp_1\",\"canSendDomestic\":true,"
+            + "\"canSendInternational\":false,\"verificationStatus\":\"verified\",\"verificationType\":\"toll_free\"},"
+            + "\"byCountry\":{\"US\":{\"count\":2,\"credits\":4,\"tier\":\"domestic\",\"allowed\":true}},"
+            + "\"blockedMessages\":[],\"compliance\":{\"messageType\":\"marketing\",\"optedOutBlocked\":0,"
+            + "\"shaftBlocked\":0,\"quietHoursBlocked\":0,\"quietHoursRescheduled\":0,\"shaftBlockedMessages\":[],"
+            + "\"quietHoursBlockedMessages\":[]},\"warnings\":[]" + overrides + "}";
+    }
+
+    @Test
+    void testPreviewBatch_readsTheKeysTheApiSends() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"total\":2,\"sendable\":2,\"blocked\":0,\"duplicates\":0,\"creditsNeeded\":4,\"creditBalance\":100,"
+                + "\"hasSufficientCredits\":true,\"hasWriteScope\":true,\"blockedMessages\":[],\"warnings\":[]}"
+        ));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(twoMessages());
+
+        assertTrue(preview.canSend());
+        assertEquals(2, preview.getTotalMessages());
+        assertEquals(2, preview.getWillSend());
+        assertEquals(0, preview.getBlocked());
+        assertEquals(4, preview.getCreditsNeeded());
+        assertEquals(100, preview.getCurrentBalance());
+        assertTrue(preview.hasEnoughCredits());
+        assertEquals(0, preview.getDuplicates());
+        assertTrue(preview.getWarnings().isEmpty());
+    }
+
+    @Test
+    void testPreviewBatch_readsDuplicatesAndWarnings() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"duplicates\":0", "\"duplicates\":1").replace(
+            "\"warnings\":[]", "\"warnings\":[\"1 duplicate number will be removed\"]")));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(twoMessages());
+
+        assertEquals(1, preview.getDuplicates());
+        assertEquals(List.of("1 duplicate number will be removed"), preview.getWarnings());
+    }
+
+    @Test
+    void testPreviewBatch_cannotSendWhenAMessageIsBlockedForMoreThanAnOptOut() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"sendable\":2,\"blocked\":0", "\"sendable\":1,\"blocked\":1").replace(
+            "\"blockedMessages\":[]",
+            "\"blockedMessages\":[{\"index\":1,\"to\":\"+447700900123\",\"reason\":\"International messaging is not enabled\"}]")));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(twoMessages());
+
+        assertFalse(preview.canSend());
+        assertEquals(1, preview.getWillSend());
+        assertEquals(1, preview.getBlockReasons().get("International messaging is not enabled"));
+    }
+
+    @Test
+    void testPreviewBatch_canSendWhenOnlyOptOutsAreBlocked() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"sendable\":2,\"blocked\":0", "\"sendable\":1,\"blocked\":1").replace(
+            "\"optedOutBlocked\":0", "\"optedOutBlocked\":1").replace(
+            "\"blockedMessages\":[]",
+            "\"blockedMessages\":[{\"index\":1,\"to\":\"+15551234568\",\"reason\":\"Contact has opted out (texted STOP)\"}]")));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(twoMessages());
+
+        assertTrue(preview.canSend());
+        assertEquals(1, preview.getBlockReasons().get("Contact has opted out (texted STOP)"));
+    }
+
+    @Test
+    void testPreviewBatch_needsABalanceOnlyWithALiveKey() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"hasSufficientCredits\":true", "\"hasSufficientCredits\":false")));
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"hasSufficientCredits\":true", "\"hasSufficientCredits\":false").replace(
+            "\"keyType\":\"live\"", "\"keyType\":\"test\"")));
+
+        BatchPreviewResponse live = client.messages().previewBatch(twoMessages());
+        BatchPreviewResponse test = client.messages().previewBatch(twoMessages());
+
+        assertFalse(live.canSend());
+        assertFalse(live.hasEnoughCredits());
+        assertTrue(test.canSend());
+    }
+
+    @Test
+    void testPreviewBatch_cannotSendWithoutTheSendScope() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("").replace(
+            "\"hasWriteScope\":true", "\"hasWriteScope\":false")));
+
+        assertFalse(client.messages().previewBatch(twoMessages()).canSend());
+    }
+
+    @Test
+    void testPreviewBatch_cannotSendMoreThanTenThousandMessages() throws Exception {
+        List<BatchMessageItem> items = new java.util.ArrayList<>();
+        for (int i = 0; i < 10001; i++) {
+            items.add(new BatchMessageItem(String.format("+1555%07d", i), "Hi"));
+        }
+        mockServer.enqueue(TestHelpers.mockSuccess(previewJson("")
+            .replace("\"total\":2,\"sendable\":2", "\"total\":10001,\"sendable\":10001")
+            .replace("\"creditsNeeded\":4,\"creditBalance\":100", "\"creditsNeeded\":20002,\"creditBalance\":50000")
+            .replace("\"count\":2,\"credits\":4", "\"count\":10001,\"credits\":20002")
+            .replace("\"warnings\":[]", "\"warnings\":[\"Batch size exceeds 10,000 limit - sending it will be rejected, "
+                + "split it into batches of 10,000 or fewer\"]")));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(new SendBatchRequest(items));
+
+        assertEquals(10001, preview.getTotalMessages());
+        assertEquals(10001, preview.getWillSend());
+        assertTrue(preview.hasEnoughCredits());
+        assertFalse(preview.canSend());
+    }
+
+    @Test
+    void testPreviewBatch_testKeyOnAnUnverifiedWorkspace_readsTheLiveChecks() throws Exception {
+        String noProfile = "No messaging profile - complete verification first";
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"total\":2,\"sendable\":0,\"blocked\":2,\"duplicates\":0,\"creditsNeeded\":0,\"creditBalance\":0,"
+                + "\"hasSufficientCredits\":true,\"pooled\":false,\"keyType\":\"test\",\"keyScopes\":[\"sms:send\"],"
+                + "\"hasWriteScope\":true,\"messagingProfile\":{\"id\":null,\"canSendDomestic\":false,"
+                + "\"canSendInternational\":false,\"verificationStatus\":null,\"verificationType\":null},"
+                + "\"byCountry\":{\"US\":{\"count\":2,\"credits\":0,\"tier\":\"domestic\",\"allowed\":false,"
+                + "\"blockedReason\":\"" + noProfile + "\"}},"
+                + "\"blockedMessages\":[{\"index\":0,\"to\":\"+15551234567\",\"reason\":\"" + noProfile + "\"},"
+                + "{\"index\":1,\"to\":\"+15551234568\",\"reason\":\"" + noProfile + "\"}],"
+                + "\"compliance\":{\"messageType\":\"marketing\",\"optedOutBlocked\":0,\"shaftBlocked\":0,"
+                + "\"quietHoursBlocked\":0,\"quietHoursRescheduled\":0,\"shaftBlockedMessages\":[],"
+                + "\"quietHoursBlockedMessages\":[]},"
+                + "\"warnings\":[\"Using TEST key - messages will be simulated in sandbox mode\","
+                + "\"No messaging profile - complete verification to send messages\","
+                + "\"Marketing messages are subject to quiet hours enforcement (8pm-8am recipient local time)\"]}"
+        ));
+
+        BatchPreviewResponse preview = client.messages().previewBatch(twoMessages());
+
+        assertFalse(preview.canSend());
+        assertEquals(0, preview.getWillSend());
+        assertEquals(2, preview.getBlockReasons().get(noProfile));
+        assertTrue(preview.getWarnings().contains("Using TEST key - messages will be simulated in sandbox mode"));
+    }
+
     @Test
     void testBatchList_iteration() throws Exception {
         mockServer.enqueue(TestHelpers.mockSuccess(

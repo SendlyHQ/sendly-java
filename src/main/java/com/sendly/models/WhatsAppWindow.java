@@ -23,6 +23,12 @@ public class WhatsAppWindow {
     /** True when a 24-hour customer-service window is currently open. */
     public boolean isOpen() { return open; }
 
-    /** When the window closes (ISO 8601), or null when no window is open. */
+    /**
+     * When the window closes (ISO 8601). After it closes this is the past
+     * expiry, with {@link #isOpen()} false. Null when Sendly has no window on
+     * record for the pair; a free-form send may still go through then if
+     * WhatsApp reports an open window, and otherwise fails with
+     * {@code whatsapp_window_closed}.
+     */
     public String getExpiresAt() { return expiresAt; }
 }

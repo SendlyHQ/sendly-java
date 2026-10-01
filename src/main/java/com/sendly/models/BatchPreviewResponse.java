@@ -13,6 +13,8 @@ import java.util.Map;
  * Response from previewing a batch (dry run).
  */
 public class BatchPreviewResponse {
+    private static final int MAX_BATCH_MESSAGES = 10000;
+
     private final boolean canSend;
     private final int totalMessages;
     private final int willSend;
@@ -20,6 +22,8 @@ public class BatchPreviewResponse {
     private final int creditsNeeded;
     private final int currentBalance;
     private final boolean hasEnoughCredits;
+    private final int duplicates;
+    private final List<String> warnings;
     private final List<BatchPreviewItem> messages;
     private final Map<String, Integer> blockReasons;
 
@@ -27,13 +31,22 @@ public class BatchPreviewResponse {
      * Create a BatchPreviewResponse from a JSON object.
      */
     public BatchPreviewResponse(JsonObject json) {
-        this.canSend = json.has("canSend") && json.get("canSend").getAsBoolean();
-        this.totalMessages = json.has("totalMessages") ? json.get("totalMessages").getAsInt() : 0;
-        this.willSend = json.has("willSend") ? json.get("willSend").getAsInt() : 0;
-        this.blocked = json.has("blocked") ? json.get("blocked").getAsInt() : 0;
-        this.creditsNeeded = json.has("creditsNeeded") ? json.get("creditsNeeded").getAsInt() : 0;
-        this.currentBalance = json.has("currentBalance") ? json.get("currentBalance").getAsInt() : 0;
-        this.hasEnoughCredits = json.has("hasEnoughCredits") && json.get("hasEnoughCredits").getAsBoolean();
+        this.totalMessages = intOf(json, "totalMessages", "total");
+        this.willSend = intOf(json, "willSend", "sendable");
+        this.blocked = intOf(json, "blocked");
+        this.creditsNeeded = intOf(json, "creditsNeeded");
+        this.currentBalance = intOf(json, "currentBalance", "creditBalance");
+        this.hasEnoughCredits = boolOf(json, "hasEnoughCredits", "hasSufficientCredits");
+        this.duplicates = intOf(json, "duplicates");
+        this.canSend = present(json, "canSend") != null ? boolOf(json, "canSend") : canSendOf(json);
+
+        this.warnings = new ArrayList<>();
+        JsonElement warningList = present(json, "warnings");
+        if (warningList != null && warningList.isJsonArray()) {
+            for (JsonElement warning : warningList.getAsJsonArray()) {
+                if (!warning.isJsonNull()) warnings.add(warning.getAsString());
+            }
+        }
 
         this.messages = new ArrayList<>();
         if (json.has("messages") && json.get("messages").isJsonArray()) {
@@ -49,19 +62,74 @@ public class BatchPreviewResponse {
             for (String key : reasons.keySet()) {
                 blockReasons.put(key, reasons.get(key).getAsInt());
             }
+        } else if (json.has("blockedMessages") && json.get("blockedMessages").isJsonArray()) {
+            for (JsonElement element : json.getAsJsonArray("blockedMessages")) {
+                if (element.isJsonObject()) {
+                    JsonElement reason = present(element.getAsJsonObject(), "reason");
+                    if (reason != null) blockReasons.merge(reason.getAsString(), 1, Integer::sum);
+                }
+            }
         }
+    }
+
+    private boolean canSendOf(JsonObject json) {
+        JsonElement compliance = present(json, "compliance");
+        int optedOut = compliance != null && compliance.isJsonObject()
+                ? intOf(compliance.getAsJsonObject(), "optedOutBlocked") : 0;
+        JsonElement keyType = present(json, "keyType");
+        boolean testKey = keyType != null && "test".equals(keyType.getAsString());
+        return willSend > 0
+                && blocked == optedOut
+                && totalMessages <= MAX_BATCH_MESSAGES
+                && (testKey || hasEnoughCredits)
+                && boolOf(json, "hasWriteScope");
+    }
+
+    private static JsonElement present(JsonObject json, String... keys) {
+        for (String key : keys) {
+            JsonElement value = json.get(key);
+            if (value != null && !value.isJsonNull()) return value;
+        }
+        return null;
+    }
+
+    private static int intOf(JsonObject json, String... keys) {
+        JsonElement value = present(json, keys);
+        return value != null ? (int) value.getAsDouble() : 0;
+    }
+
+    private static boolean boolOf(JsonObject json, String... keys) {
+        JsonElement value = present(json, keys);
+        return value != null && value.getAsBoolean();
     }
 
     // Getters
 
+    /**
+     * Whether sending this batch would go through: at least one message is
+     * sendable, nothing is blocked except recipients who opted out (a live
+     * send skips those but rejects the whole batch for any other block), the
+     * batch has no more than 10,000 messages, the balance covers the credits
+     * with a live key (test sends are free), and the key has the
+     * {@code sms:send} scope.
+     * <p>
+     * Apart from the credits, these are the checks a live send applies. The
+     * preview checks the workspace's verification and each destination for
+     * every key, and {@code sendBatch()} skips both for a test key, so on a
+     * workspace that is not verified yet a test key reads false here although
+     * its sandbox send goes through; {@link #getBlockReasons()} says why.
+     * </p>
+     */
     public boolean canSend() {
         return canSend;
     }
 
+    /** Messages in the batch, before duplicates are removed. */
     public int getTotalMessages() {
         return totalMessages;
     }
 
+    /** Messages that would be sent. */
     public int getWillSend() {
         return willSend;
     }
@@ -74,18 +142,32 @@ public class BatchPreviewResponse {
         return creditsNeeded;
     }
 
+    /** The credit balance of the workspace, or of its pool. */
     public int getCurrentBalance() {
         return currentBalance;
     }
 
+    /** Whether the balance, with any overage allowance, covers the credits needed. */
     public boolean hasEnoughCredits() {
         return hasEnoughCredits;
     }
 
+    /** Duplicate numbers that the send would remove. */
+    public int getDuplicates() {
+        return duplicates;
+    }
+
+    /** Non-blocking warnings about the batch. */
+    public List<String> getWarnings() {
+        return warnings;
+    }
+
+    /** The preview does not return per-message rows, so this is empty. */
     public List<BatchPreviewItem> getMessages() {
         return messages;
     }
 
+    /** How many messages are blocked, by reason. */
     public Map<String, Integer> getBlockReasons() {
         return blockReasons;
     }

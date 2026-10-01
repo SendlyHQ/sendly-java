@@ -1,5 +1,6 @@
 package com.sendly.models;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 import java.util.List;
@@ -8,74 +9,104 @@ import java.util.ArrayList;
 public class Campaign {
     private String id;
     private String name;
+    @SerializedName(value = "text", alternate = {"messageText"})
     private String text;
-    @SerializedName("template_id")
+    @SerializedName(value = "template_id", alternate = {"templateId"})
     private String templateId;
-    @SerializedName("contact_list_ids")
+    @SerializedName(value = "contact_list_ids", alternate = {"contactListIds"})
     private List<String> contactListIds;
     private String status;
-    @SerializedName("recipient_count")
+    @SerializedName(value = "recipient_count", alternate = {"totalRecipients", "recipientCount"})
     private Integer recipientCount;
-    @SerializedName("sent_count")
+    @SerializedName(value = "sent_count", alternate = {"sentCount"})
     private Integer sentCount;
-    @SerializedName("delivered_count")
+    @SerializedName(value = "delivered_count", alternate = {"deliveredCount"})
     private Integer deliveredCount;
-    @SerializedName("failed_count")
+    @SerializedName(value = "failed_count", alternate = {"failedCount"})
     private Integer failedCount;
-    @SerializedName("estimated_credits")
+    @SerializedName(value = "estimated_credits", alternate = {"estimatedCredits"})
     private Double estimatedCredits;
-    @SerializedName("credits_used")
+    @SerializedName(value = "credits_used", alternate = {"creditsUsed"})
     private Double creditsUsed;
-    @SerializedName("scheduled_at")
+    @SerializedName(value = "scheduled_at", alternate = {"scheduledAt"})
     private String scheduledAt;
     private String timezone;
-    @SerializedName("started_at")
+    @SerializedName(value = "started_at", alternate = {"sentAt", "startedAt"})
     private String startedAt;
-    @SerializedName("completed_at")
+    @SerializedName(value = "completed_at", alternate = {"completedAt"})
     private String completedAt;
-    @SerializedName("created_at")
+    @SerializedName(value = "created_at", alternate = {"createdAt"})
     private String createdAt;
-    @SerializedName("updated_at")
+    @SerializedName(value = "updated_at", alternate = {"updatedAt"})
     private String updatedAt;
+    @SerializedName(value = "batch_id", alternate = {"batchId"})
+    private String batchId;
 
     public Campaign() {}
 
     public Campaign(JsonObject json) {
-        if (json.has("id")) this.id = json.get("id").getAsString();
-        if (json.has("name")) this.name = json.get("name").getAsString();
-        if (json.has("text")) this.text = json.get("text").getAsString();
-        if (json.has("template_id") && !json.get("template_id").isJsonNull()) {
-            this.templateId = json.get("template_id").getAsString();
+        this.id = string(json, "id");
+        this.name = string(json, "name");
+        this.text = string(json, "text", "messageText");
+        this.templateId = string(json, "template_id", "templateId");
+        this.contactListIds = contactListIdsOf(json);
+        this.status = string(json, "status");
+        this.recipientCount = integer(json, "totalRecipients", "recipient_count", "recipientCount");
+        this.sentCount = integer(json, "sentCount", "sent_count");
+        this.deliveredCount = integer(json, "deliveredCount", "delivered_count");
+        this.failedCount = integer(json, "failedCount", "failed_count");
+        this.estimatedCredits = decimal(json, "estimatedCredits", "estimated_credits");
+        this.creditsUsed = decimal(json, "creditsUsed", "credits_used");
+        this.scheduledAt = string(json, "scheduledAt", "scheduled_at");
+        this.timezone = string(json, "timezone");
+        this.startedAt = string(json, "sentAt", "started_at", "startedAt");
+        this.completedAt = string(json, "completedAt", "completed_at");
+        this.createdAt = string(json, "created_at", "createdAt");
+        this.updatedAt = string(json, "updated_at", "updatedAt");
+        this.batchId = string(json, "batchId", "batch_id");
+    }
+
+    private static JsonElement present(JsonObject json, String... keys) {
+        for (String key : keys) {
+            JsonElement value = json.get(key);
+            if (value != null && !value.isJsonNull()) {
+                return value;
+            }
         }
-        if (json.has("contact_list_ids") && json.get("contact_list_ids").isJsonArray()) {
-            this.contactListIds = new ArrayList<>();
-            json.get("contact_list_ids").getAsJsonArray().forEach(e -> contactListIds.add(e.getAsString()));
+        return null;
+    }
+
+    private static String string(JsonObject json, String... keys) {
+        JsonElement value = present(json, keys);
+        return value != null ? value.getAsString() : null;
+    }
+
+    private static Integer integer(JsonObject json, String... keys) {
+        JsonElement value = present(json, keys);
+        return value != null ? value.getAsInt() : null;
+    }
+
+    private static Double decimal(JsonObject json, String... keys) {
+        JsonElement value = present(json, keys);
+        return value != null ? value.getAsDouble() : null;
+    }
+
+    private static List<String> contactListIdsOf(JsonObject json) {
+        JsonElement ids = present(json, "contact_list_ids", "contactListIds");
+        if (ids != null && ids.isJsonArray()) {
+            List<String> out = new ArrayList<>();
+            ids.getAsJsonArray().forEach(e -> {
+                if (!e.isJsonNull()) out.add(e.getAsString());
+            });
+            return out;
         }
-        if (json.has("status")) this.status = json.get("status").getAsString();
-        if (json.has("recipient_count")) this.recipientCount = json.get("recipient_count").getAsInt();
-        if (json.has("sent_count")) this.sentCount = json.get("sent_count").getAsInt();
-        if (json.has("delivered_count")) this.deliveredCount = json.get("delivered_count").getAsInt();
-        if (json.has("failed_count")) this.failedCount = json.get("failed_count").getAsInt();
-        if (json.has("estimated_credits") && !json.get("estimated_credits").isJsonNull()) {
-            this.estimatedCredits = json.get("estimated_credits").getAsDouble();
+        String targetListId = string(json, "targetListId");
+        if (targetListId != null) {
+            List<String> out = new ArrayList<>();
+            out.add(targetListId);
+            return out;
         }
-        if (json.has("credits_used") && !json.get("credits_used").isJsonNull()) {
-            this.creditsUsed = json.get("credits_used").getAsDouble();
-        }
-        if (json.has("scheduled_at") && !json.get("scheduled_at").isJsonNull()) {
-            this.scheduledAt = json.get("scheduled_at").getAsString();
-        }
-        if (json.has("timezone") && !json.get("timezone").isJsonNull()) {
-            this.timezone = json.get("timezone").getAsString();
-        }
-        if (json.has("started_at") && !json.get("started_at").isJsonNull()) {
-            this.startedAt = json.get("started_at").getAsString();
-        }
-        if (json.has("completed_at") && !json.get("completed_at").isJsonNull()) {
-            this.completedAt = json.get("completed_at").getAsString();
-        }
-        if (json.has("created_at")) this.createdAt = json.get("created_at").getAsString();
-        if (json.has("updated_at")) this.updatedAt = json.get("updated_at").getAsString();
+        return null;
     }
 
     public String getId() { return id; }
@@ -96,4 +127,6 @@ public class Campaign {
     public String getCompletedAt() { return completedAt; }
     public String getCreatedAt() { return createdAt; }
     public String getUpdatedAt() { return updatedAt; }
+    /** The batch the campaign was sent as, or null before it is sent. */
+    public String getBatchId() { return batchId; }
 }

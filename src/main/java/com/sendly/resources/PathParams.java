@@ -1,5 +1,7 @@
 package com.sendly.resources;
 
+import com.sendly.exceptions.ValidationException;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -16,6 +18,9 @@ final class PathParams {
     }
 
     static String encode(String value) {
-        return value == null ? "" : URLEncoder.encode(value, StandardCharsets.UTF_8);
+        if (value == null || value.isEmpty() || value.equals(".") || value.equals("..")) {
+            throw new ValidationException("Path parameter must not be empty, \".\" or \"..\"");
+        }
+        return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 }

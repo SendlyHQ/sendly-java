@@ -3,7 +3,7 @@ package com.sendly.models;
 import com.google.gson.annotations.SerializedName;
 
 public class ScheduleCampaignRequest {
-    @SerializedName("scheduled_at")
+    @SerializedName("scheduledAt")
     private final String scheduledAt;
     private final String timezone;
 

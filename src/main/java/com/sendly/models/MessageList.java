@@ -1,6 +1,7 @@
 package com.sendly.models;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
@@ -30,13 +31,23 @@ public class MessageList implements Iterable<Message> {
             }
         }
 
-        JsonObject pagination = json.has("pagination") ?
+        JsonObject pagination = json.has("pagination") && json.get("pagination").isJsonObject() ?
                 json.getAsJsonObject("pagination") : new JsonObject();
 
-        this.total = pagination.has("total") ? pagination.get("total").getAsInt() : messages.size();
-        this.limit = pagination.has("limit") ? pagination.get("limit").getAsInt() : 20;
-        this.offset = pagination.has("offset") ? pagination.get("offset").getAsInt() : 0;
-        this.hasMore = pagination.has("has_more") && pagination.get("has_more").getAsBoolean();
+        this.total = intOr(pagination, "total", messages.size());
+        this.limit = intOr(pagination, "limit", 20);
+        this.offset = intOr(pagination, "offset", 0);
+        JsonElement more = present(pagination, "hasMore") ? pagination.get("hasMore")
+                : present(pagination, "has_more") ? pagination.get("has_more") : null;
+        this.hasMore = more != null ? more.getAsBoolean() : offset + messages.size() < total;
+    }
+
+    private static boolean present(JsonObject json, String key) {
+        return json.has(key) && !json.get(key).isJsonNull();
+    }
+
+    private static int intOr(JsonObject json, String key, int fallback) {
+        return present(json, key) ? json.get(key).getAsInt() : fallback;
     }
 
     /**

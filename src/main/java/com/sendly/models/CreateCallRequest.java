@@ -81,7 +81,8 @@ public class CreateCallRequest {
         /**
          * A voice-enabled number in your workspace to call from. Optional when
          * the workspace has exactly one voice-enabled number; required
-         * otherwise ({@code from_number_required}).
+         * otherwise ({@code from_number_required}). It must be a US or
+         * Canadian number ({@code from_number_not_supported}).
          */
         public Builder from(String from) {
             this.from = from;

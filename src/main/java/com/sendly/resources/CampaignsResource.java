@@ -78,12 +78,40 @@ public class CampaignsResource {
         return new CampaignPreview(response);
     }
 
+    /**
+     * Send a campaign now.
+     * <p>
+     * The API answers with the batch the campaign was sent as, so the
+     * returned campaign carries the campaign {@code id}, the batch's
+     * {@link Campaign#getBatchId() batch ID}, its counts (recipients, sent,
+     * failed, credits used) and the batch's status, one of the
+     * {@code BatchMessageResponse.STATUS_*} values. Fetch the campaign with
+     * {@link #get(String)} for its name, text and campaign status.
+     * </p>
+     *
+     * @param id Campaign ID
+     * @return The campaign's send result
+     * @throws SendlyException if the request fails
+     */
     public Campaign send(String id) throws SendlyException {
         if (id == null || id.isEmpty()) {
             throw new ValidationException("Campaign ID is required");
         }
         JsonObject response = client.post("/campaigns/" + PathParams.encode(id) + "/send", new JsonObject());
-        return new Campaign(response);
+        JsonObject result = response.deepCopy();
+        if (!result.has("id")) {
+            result.addProperty("id", id);
+        }
+        copyIfAbsent(response, "total", result, "totalRecipients");
+        copyIfAbsent(response, "sent", result, "sentCount");
+        copyIfAbsent(response, "failed", result, "failedCount");
+        return new Campaign(result);
+    }
+
+    private static void copyIfAbsent(JsonObject from, String fromKey, JsonObject to, String toKey) {
+        if (from.has(fromKey) && !to.has(toKey)) {
+            to.add(toKey, from.get(fromKey));
+        }
     }
 
     public Campaign schedule(String id, ScheduleCampaignRequest request) throws SendlyException {

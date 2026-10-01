@@ -21,7 +21,7 @@ public class SendSmsExample {
         try {
             // Send an SMS
             Message message = client.messages().send(
-                "+15551234567",
+                "+15125550123",
                 "Hello from Sendly Java SDK!"
             );
 
@@ -36,7 +36,12 @@ public class SendSmsExample {
         } catch (InsufficientCreditsException e) {
             System.err.println("Insufficient credits: " + e.getMessage());
         } catch (RateLimitException e) {
-            System.err.println("Rate limited. Retry after: " + e.getRetryAfter() + " seconds");
+            if ("too_many_failed_key_attempts".equals(e.getApiErrorCode())) {
+                System.err.println("Locked out after repeated wrong API keys. Fix the key; do not retry.");
+            } else {
+                System.err.println("Rate limited (" + e.getApiErrorCode() + "). Retry after: "
+                    + e.getRetryAfter() + " seconds");
+            }
         } catch (ValidationException e) {
             System.err.println("Validation error: " + e.getMessage());
         } catch (SendlyException e) {

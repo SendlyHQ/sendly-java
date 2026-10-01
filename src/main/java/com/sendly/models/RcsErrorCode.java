@@ -25,6 +25,14 @@ public final class RcsErrorCode {
     public static final String INSUFFICIENT_PERMISSIONS = "insufficient_permissions";
     /** 403: the key's workspace role may not read or edit verifications. */
     public static final String FORBIDDEN = "forbidden";
+    /**
+     * 429: this address has sent too many invalid API keys, so the key is
+     * wrong. Never retried automatically; {@code getRetryAfter()} says when
+     * the lockout ends.
+     */
+    public static final String TOO_MANY_FAILED_KEY_ATTEMPTS = "too_many_failed_key_attempts";
+    /** 429: too many API key checks are already running; retried automatically after a second. */
+    public static final String TOO_MANY_CONCURRENT_VERIFICATIONS = "too_many_concurrent_verifications";
 
     private RcsErrorCode() {}
 }

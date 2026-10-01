@@ -91,7 +91,9 @@ public class CreateWhatsAppTemplateRequest {
 
         /**
          * Template category — drives Meta review rules and pricing:
-         * "AUTHENTICATION", "UTILITY", or "MARKETING".
+         * "AUTHENTICATION", "UTILITY", or "MARKETING" (the server uppercases
+         * it). Required, with no default: leaving it out returns 400
+         * {@code template_category_invalid}. An update can't change it.
          */
         public Builder category(String category) {
             this.category = category;
@@ -113,7 +115,12 @@ public class CreateWhatsAppTemplateRequest {
             return this;
         }
 
-        /** Optional text header. */
+        /**
+         * Optional text header. It is fixed text: a header containing
+         * {@code {{n}}} is refused with
+         * {@code template_header_variable_unsupported}, because sends fill
+         * only body and button variables.
+         */
         public Builder header(String header) {
             this.header = header;
             return this;

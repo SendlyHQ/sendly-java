@@ -7,7 +7,7 @@ public class Label {
     private String name;
     private String color;
     private String description;
-    @SerializedName("created_at")
+    @SerializedName(value = "created_at", alternate = {"createdAt"})
     private String createdAt;
 
     public String getId() { return id; }

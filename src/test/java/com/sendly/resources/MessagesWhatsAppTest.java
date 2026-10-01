@@ -7,6 +7,7 @@ import com.sendly.models.SendWhatsAppMessageRequest;
 import com.sendly.models.WhatsAppMessage;
 import com.sendly.models.WhatsAppTemplateButtonVariables;
 import com.sendly.models.WhatsAppTemplateSendParams;
+import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
@@ -258,5 +259,30 @@ class MessagesWhatsAppTest {
                     .text("Hello!")
                     .build());
         });
+    }
+
+    // ==================== send outcome unknown ====================
+
+    @Test
+    void testSendWhatsApp_unconfirmed_isThrownOnFirstAttempt() {
+        Sendly retrying = new Sendly("sk_live_123", new Sendly.Builder()
+                .baseUrl(mockServer.url("/").toString())
+                .maxRetries(3));
+        mockServer.enqueue(new MockResponse().setResponseCode(409).addHeader("Content-Type", "application/json").setBody(
+            "{\"error\":\"whatsapp_send_unconfirmed\",\"errorCode\":\"E024\"," +
+            "\"message\":\"We couldn't confirm whether WhatsApp accepted this message. It has been marked failed and refunded, " +
+            "but it may still be delivered. Check before sending it again, or it could arrive twice.\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_wa_2\",\"channel\":\"whatsapp\",\"status\":\"queued\"}"));
+
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            retrying.messages().send(SendWhatsAppMessageRequest.builder()
+                .to("+12025550143")
+                .from("+15125550188")
+                .text("Your table is ready!")
+                .build()));
+        assertEquals("whatsapp_send_unconfirmed", e.getApiErrorCode());
+        assertEquals(409, e.getStatusCode());
+        assertEquals(1, mockServer.getRequestCount());
     }
 }

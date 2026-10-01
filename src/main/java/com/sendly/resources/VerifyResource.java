@@ -75,6 +75,6 @@ public class VerifyResource {
      * Resend an OTP verification code.
      */
     public SendVerificationResponse resend(String verificationId) throws SendlyException {
-        return client.request("POST", "/verify/" + PathParams.encode(verificationId) + "/resend", null, SendVerificationResponse.class);
+        return client.request("POST", "/verify/" + PathParams.encode(verificationId) + "/resend", new HashMap<>(), SendVerificationResponse.class);
     }
 }

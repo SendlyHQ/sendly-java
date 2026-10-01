@@ -18,6 +18,7 @@ public class ApiKey {
     private final String createdAt;
     private final String lastUsedAt;
     private final String expiresAt;
+    private final String revokedAt;
     private final boolean isRevoked;
 
     public ApiKey(JsonObject json) {
@@ -26,11 +27,23 @@ public class ApiKey {
         this.type = getStringOrNull(json, "type");
         this.prefix = getStringOrNull(json, "prefix");
         this.lastFour = getStringOrNull(json, "last_four", "lastFour");
-        this.permissions = getStringList(json, "permissions");
+        this.permissions = json.has("permissions") && json.get("permissions").isJsonArray()
+            ? getStringList(json, "permissions") : getStringList(json, "scopes");
         this.createdAt = getStringOrNull(json, "created_at", "createdAt");
         this.lastUsedAt = getStringOrNull(json, "last_used_at", "lastUsedAt");
         this.expiresAt = getStringOrNull(json, "expires_at", "expiresAt");
-        this.isRevoked = getBoolOrDefault(json, "is_revoked", "isRevoked", false);
+        this.revokedAt = getStringOrNull(json, "revoked_at", "revokedAt");
+        this.isRevoked = isRevokedOf(json);
+    }
+
+    private boolean isRevokedOf(JsonObject json) {
+        for (String key : new String[] {"is_revoked", "isRevoked", "revoked"}) {
+            if (json.has(key) && !json.get(key).isJsonNull()) return json.get(key).getAsBoolean();
+        }
+        for (String key : new String[] {"is_active", "isActive"}) {
+            if (json.has(key) && !json.get(key).isJsonNull()) return !json.get(key).getAsBoolean();
+        }
+        return false;
     }
 
     private String getStringOrNull(JsonObject json, String key) {
@@ -41,12 +54,6 @@ public class ApiKey {
         if (json.has(key1) && !json.get(key1).isJsonNull()) return json.get(key1).getAsString();
         if (json.has(key2) && !json.get(key2).isJsonNull()) return json.get(key2).getAsString();
         return null;
-    }
-
-    private boolean getBoolOrDefault(JsonObject json, String key1, String key2, boolean defaultVal) {
-        if (json.has(key1) && !json.get(key1).isJsonNull()) return json.get(key1).getAsBoolean();
-        if (json.has(key2) && !json.get(key2).isJsonNull()) return json.get(key2).getAsBoolean();
-        return defaultVal;
     }
 
     private List<String> getStringList(JsonObject json, String key) {
@@ -71,6 +78,13 @@ public class ApiKey {
     public String getCreatedAt() { return createdAt; }
     public String getLastUsedAt() { return lastUsedAt; }
     public String getExpiresAt() { return expiresAt; }
+    /**
+     * When the key was revoked, or null while it is active. It is also null on
+     * the keys {@link com.sendly.resources.AccountResource#listApiKeys()}
+     * returns, revoked ones included, because the list does not send it;
+     * {@code getApiKey(id)} and {@code revokeApiKey(id)} do.
+     */
+    public String getRevokedAt() { return revokedAt; }
     public boolean isRevoked() { return isRevoked; }
 
     @Override

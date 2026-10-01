@@ -21,19 +21,19 @@ public class ScheduledMessage {
     private final String from;
     private final String status;
 
-    @SerializedName("scheduled_at")
+    @SerializedName(value = "scheduledAt", alternate = {"scheduled_at"})
     private final Instant scheduledAt;
 
-    @SerializedName("credits_reserved")
+    @SerializedName(value = "creditsReserved", alternate = {"credits_reserved"})
     private final int creditsReserved;
 
-    @SerializedName("created_at")
+    @SerializedName(value = "createdAt", alternate = {"created_at"})
     private final Instant createdAt;
 
-    @SerializedName("cancelled_at")
+    @SerializedName(value = "cancelledAt", alternate = {"cancelled_at"})
     private final Instant cancelledAt;
 
-    @SerializedName("sent_at")
+    @SerializedName(value = "sentAt", alternate = {"sent_at"})
     private final Instant sentAt;
 
     private final String error;
@@ -47,16 +47,30 @@ public class ScheduledMessage {
         this.text = getStringOrNull(json, "text");
         this.from = getStringOrNull(json, "from");
         this.status = getStringOrNull(json, "status");
-        this.scheduledAt = parseInstant(getStringOrNull(json, "scheduled_at"));
-        this.creditsReserved = json.has("credits_reserved") ? json.get("credits_reserved").getAsInt() : 0;
-        this.createdAt = parseInstant(getStringOrNull(json, "created_at"));
-        this.cancelledAt = parseInstant(getStringOrNull(json, "cancelled_at"));
-        this.sentAt = parseInstant(getStringOrNull(json, "sent_at"));
+        this.scheduledAt = parseInstant(getStringOrNull(json, "scheduledAt", "scheduled_at"));
+        this.creditsReserved = getIntOrZero(json, "creditsReserved", "credits_reserved");
+        this.createdAt = parseInstant(getStringOrNull(json, "createdAt", "created_at"));
+        this.cancelledAt = parseInstant(getStringOrNull(json, "cancelledAt", "cancelled_at"));
+        this.sentAt = parseInstant(getStringOrNull(json, "sentAt", "sent_at"));
         this.error = getStringOrNull(json, "error");
     }
 
     private String getStringOrNull(JsonObject json, String key) {
         return json.has(key) && !json.get(key).isJsonNull() ? json.get(key).getAsString() : null;
+    }
+
+    private String getStringOrNull(JsonObject json, String key, String fallbackKey) {
+        String value = getStringOrNull(json, key);
+        return value != null ? value : getStringOrNull(json, fallbackKey);
+    }
+
+    private int getIntOrZero(JsonObject json, String key, String fallbackKey) {
+        for (String k : new String[] {key, fallbackKey}) {
+            if (json.has(k) && !json.get(k).isJsonNull()) {
+                return json.get(k).getAsInt();
+            }
+        }
+        return 0;
     }
 
     private Instant parseInstant(String value) {

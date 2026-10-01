@@ -3,9 +3,11 @@ package com.sendly.resources;
 import com.sendly.Sendly;
 import com.sendly.TestHelpers;
 import com.sendly.exceptions.*;
+import com.sendly.models.GroupMessageResponse;
 import com.sendly.models.Message;
 import com.sendly.models.MessageList;
 import com.sendly.models.ListMessagesRequest;
+import com.sendly.models.SendGroupMessageRequest;
 import com.sendly.models.SendMessageRequest;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -15,6 +17,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -372,6 +375,128 @@ class MessagesTest {
         });
     }
 
+    // ==================== Wire Shape Tests ====================
+
+    private static String v1MessagePage(int count, int offset, int total, int limit, boolean hasMore) {
+        StringBuilder json = new StringBuilder("{\"data\":[");
+        for (int i = 0; i < count; i++) {
+            if (i > 0) json.append(",");
+            json.append(String.format(
+                "{\"id\":\"msg_%d\",\"to\":\"+15551234567\",\"from\":\"+15559876543\",\"text\":\"Test %d\","
+                    + "\"status\":\"delivered\",\"direction\":\"outbound\",\"error\":null,\"errorCode\":null,"
+                    + "\"retryCount\":0,\"segments\":1,\"creditsUsed\":2,\"isSandbox\":true,"
+                    + "\"createdAt\":\"2026-09-25T00:00:00.000Z\",\"deliveredAt\":\"2026-09-25T00:00:02.000Z\","
+                    + "\"message_format\":\"sms\",\"messageFormat\":\"sms\"}",
+                offset + i, offset + i
+            ));
+        }
+        json.append("],\"pagination\":{\"total\":").append(total)
+            .append(",\"limit\":").append(limit)
+            .append(",\"offset\":").append(offset)
+            .append(",\"page\":").append(offset / limit + 1)
+            .append(",\"totalPages\":").append((total + limit - 1) / limit)
+            .append(",\"hasMore\":").append(hasMore)
+            .append("},\"count\":").append(count).append("}");
+        return json.toString();
+    }
+
+    @Test
+    void testList_readsHasMoreTheApiSends() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(100, 0, 150, 100, true)));
+
+        MessageList list = client.messages().list(ListMessagesRequest.builder().limit(100).build());
+
+        assertTrue(list.hasMore());
+        assertEquals(150, list.getTotal());
+    }
+
+    @Test
+    void testEach_walksEveryPageTheApiReports() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(100, 0, 150, 100, true)));
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(50, 100, 150, 100, false)));
+
+        List<Message> messages = new ArrayList<>();
+        for (Message message : client.messages().each()) {
+            messages.add(message);
+        }
+
+        assertEquals(150, messages.size());
+        assertEquals(2, mockServer.getRequestCount());
+        assertTrue(mockServer.takeRequest().getPath().contains("offset=0"));
+        assertTrue(mockServer.takeRequest().getPath().contains("offset=100"));
+    }
+
+    @Test
+    void testEach_sendsTheRequestFiltersOnEveryPage() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(100, 0, 101, 100, true)));
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(1, 100, 101, 100, false)));
+
+        int seen = 0;
+        for (Message ignored : client.messages().each(
+                ListMessagesRequest.builder().status("failed").to("+15551234567").direction("inbound").build())) {
+            seen++;
+        }
+
+        assertEquals(101, seen);
+        for (int page = 0; page < 2; page++) {
+            RecordedRequest request = mockServer.takeRequest();
+            okhttp3.HttpUrl url = request.getRequestUrl();
+            assertEquals("failed", url.queryParameter("status"));
+            assertEquals("+15551234567", url.queryParameter("to"));
+            assertTrue(request.getPath().contains("to=%2B15551234567"), request.getPath());
+            assertEquals("inbound", url.queryParameter("direction"));
+            assertEquals(String.valueOf(page * 100), url.queryParameter("offset"));
+            assertEquals("100", url.queryParameter("limit"));
+        }
+    }
+
+    @Test
+    void testList_sendsTheDirectionFilter() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(v1MessagePage(0, 0, 0, 50, false)));
+
+        client.messages().list(ListMessagesRequest.builder().direction("outbound").build());
+
+        assertEquals("outbound", mockServer.takeRequest().getRequestUrl().queryParameter("direction"));
+    }
+
+    @Test
+    void testGet_readsTheDirectionTheApiSends() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_in\",\"to\":\"+15559876543\",\"from\":\"+15551234567\",\"text\":\"STOP\","
+                + "\"status\":\"received\",\"direction\":\"inbound\",\"error\":null}"
+        ));
+
+        assertEquals("inbound", client.messages().get("msg_in").getDirection());
+    }
+
+    @Test
+    void testGet_readsTheFailureTextFromError() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_1\",\"to\":\"+15551234567\",\"status\":\"failed\",\"direction\":\"outbound\","
+                + "\"error\":\"Carrier rejected the message\",\"errorCode\":\"30007\"}"
+        ));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_2\",\"to\":\"+15551234567\",\"status\":\"delivered\",\"direction\":\"outbound\","
+                + "\"error\":null,\"errorCode\":null}"
+        ));
+
+        Message failed = client.messages().get("msg_1");
+        Message delivered = client.messages().get("msg_2");
+
+        assertEquals("Carrier rejected the message", failed.getErrorMessage());
+        assertEquals("30007", failed.getErrorCode());
+        assertNull(delivered.getErrorMessage());
+    }
+
+    @Test
+    void testList_derivesHasMoreWhenThePageOmitsIt() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"data\":[{\"id\":\"msg_1\"}],\"pagination\":{\"total\":2,\"limit\":1,\"offset\":0}}"
+        ));
+
+        assertTrue(client.messages().list().hasMore());
+    }
+
     // ==================== each() Method Tests ====================
 
     @Test
@@ -549,5 +674,37 @@ class MessagesTest {
         assertEquals("msg_0", list.get(0).getId());
         assertEquals("msg_2", list.get(2).getId());
         assertEquals("msg_4", list.get(4).getId());
+    }
+
+    @Test
+    void testSendGroup_liveSendListsRecipientsAsObjects() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"id\":\"msg_g1\",\"status\":\"sent\",\"to\":["
+            + "{\"phoneNumber\":\"+14155551234\",\"status\":\"queued\"},"
+            + "{\"phoneNumber\":\"+14155555678\",\"status\":\"queued\"}],"
+            + "\"group_message_id\":\"grp_1\"}").setResponseCode(201));
+
+        GroupMessageResponse response = client.messages().sendGroup(
+            new SendGroupMessageRequest(Arrays.asList("+14155551234", "+14155555678"), "Team sync at noon"));
+
+        assertEquals("msg_g1", response.getId());
+        assertEquals("grp_1", response.getGroupMessageId());
+        assertEquals(Arrays.asList("+14155551234", "+14155555678"), response.getTo());
+        assertEquals(2, response.getRecipients().size());
+        assertEquals("+14155555678", response.getRecipients().get(1).getPhoneNumber());
+        assertEquals("queued", response.getRecipients().get(1).getStatus());
+    }
+
+    @Test
+    void testSendGroup_simulatedSendListsRecipientsAsNumbers() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"id\":\"msg_g2\",\"status\":\"delivered\","
+            + "\"to\":[\"+14155551234\",\"+14155555678\"],\"simulated\":true,"
+            + "\"message\":\"Group message simulated (test key or verification pending).\"}").setResponseCode(201));
+
+        GroupMessageResponse response = client.messages().sendGroup(
+            new SendGroupMessageRequest(Arrays.asList("+14155551234", "+14155555678"), "Team sync at noon"));
+
+        assertTrue(response.isSimulated());
+        assertEquals(Arrays.asList("+14155551234", "+14155555678"), response.getTo());
+        assertTrue(response.getRecipients().isEmpty());
     }
 }

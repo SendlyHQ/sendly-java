@@ -1,6 +1,7 @@
 package com.sendly.models;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.annotations.SerializedName;
 
@@ -104,12 +105,22 @@ public class Message {
         this.updatedAt = parseInstant(getStringOrNull(json, "updated_at", "updatedAt"));
         this.deliveredAt = parseInstant(getStringOrNull(json, "delivered_at", "deliveredAt"));
         this.errorCode = getStringOrNull(json, "error_code", "errorCode");
-        this.errorMessage = getStringOrNull(json, "error_message", "errorMessage");
+        this.errorMessage = errorMessageOf(json);
         this.retryCount = json.has("retry_count") || json.has("retryCount") ?
             (json.has("retry_count") ? json.get("retry_count").getAsInt() : json.get("retryCount").getAsInt()) : 0;
         this.metadata = parseMetadata(json);
         this.mediaUrls = parseStringArray(json, "media_urls", "mediaUrls");
         this.aiMetadata = parseJsonObject(json, "ai_metadata", "aiMetadata");
+    }
+
+    private String errorMessageOf(JsonObject json) {
+        String message = getStringOrNull(json, "error_message", "errorMessage");
+        if (message != null) {
+            return message;
+        }
+        JsonElement error = json.get("error");
+        return error != null && error.isJsonPrimitive() && error.getAsJsonPrimitive().isString()
+                ? error.getAsString() : null;
     }
 
     private List<String> parseStringArray(JsonObject json, String key1, String key2) {
@@ -257,6 +268,10 @@ public class Message {
         return errorCode;
     }
 
+    /**
+     * Why the message failed, as the API reports it in {@code error}; null
+     * when it has not failed.
+     */
     public String getErrorMessage() {
         return errorMessage;
     }

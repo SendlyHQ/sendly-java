@@ -80,7 +80,7 @@ class WhatsAppTest {
             client.whatsapp().signup().create("15559876543");
         });
         assertThrows(ValidationException.class, () -> {
-            client.whatsapp().signup().create(null);
+            client.whatsapp().signup().create((String) null);
         });
     }
 

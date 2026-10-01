@@ -13,9 +13,6 @@ import com.sendly.models.OwnedNumbersResponse;
 import com.sendly.models.ReleaseNumberResponse;
 import com.sendly.models.UpdateNumberRequest;
 
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -248,11 +245,6 @@ public class NumbersResource {
     }
 
     private String encodePathParam(String param) {
-        try {
-            return URLEncoder.encode(param, StandardCharsets.UTF_8.toString());
-        } catch (UnsupportedEncodingException e) {
-            // UTF-8 is always supported, this should never happen
-            return param;
-        }
+        return PathParams.encode(param);
     }
 }

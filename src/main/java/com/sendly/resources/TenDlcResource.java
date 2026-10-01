@@ -14,8 +14,6 @@ import com.sendly.models.TenDlcCampaignListResponse;
 import com.sendly.models.TenDlcCampaignResponse;
 import com.sendly.models.TenDlcQualifyResponse;
 
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 /**
  * 10DLC resource — local-number texting registration.
@@ -249,6 +247,6 @@ public class TenDlcResource {
     }
 
     private static String encode(String s) {
-        return URLEncoder.encode(s, StandardCharsets.UTF_8);
+        return PathParams.encode(s);
     }
 }

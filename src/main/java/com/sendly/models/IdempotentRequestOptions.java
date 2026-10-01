@@ -16,10 +16,11 @@ public class IdempotentRequestOptions {
      * the original response instead of executing again.
      * </p>
      * <p>
-     * Note: a response is cached under the key once the original attempt
-     * completes, including error responses — retrying a failed request with
-     * the same key returns the recorded failure; use a fresh key to
-     * re-execute.
+     * Note: a 2xx response, or a 4xx other than a 429, is recorded under
+     * the key once the original attempt completes, and repeating the request
+     * with the same key returns it; use a fresh key to run a refused request
+     * again. A 5xx or a 429 is never recorded, so retry it under the same
+     * key.
      * </p>
      *
      * @param idempotencyKey Idempotency key for this operation (1-255
