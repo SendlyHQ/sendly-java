@@ -55,7 +55,7 @@ import java.util.regex.Pattern;
  * }</pre>
  */
 public class Sendly {
-    public static final String VERSION = "4.2.0";
+    public static final String VERSION = "4.3.0";
     public static final String DEFAULT_BASE_URL = "https://sendly.live/api/v1";
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
