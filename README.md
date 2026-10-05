@@ -2190,7 +2190,6 @@ client.enterprise().workspaces().revokeKey("ws_xxx", "key_abc");
 
 // Pooled enterprise credits
 JsonObject pool = client.enterprise().credits().get();
-client.enterprise().credits().deposit(100000, "Q2 top-up");
 ```
 
 ### Webhooks, Analytics & Billing
