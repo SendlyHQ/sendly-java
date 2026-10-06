@@ -69,7 +69,11 @@ public enum WebhookEventType {
     SHORT_CODE_ACTION_REQUIRED("short_code.action_required"),
     SHORT_CODE_REJECTED("short_code.rejected"),
     SHORT_CODE_FILED("short_code.filed"),
-    SHORT_CODE_LIVE("short_code.live");
+    SHORT_CODE_LIVE("short_code.live"),
+    SHORT_CODE_SUSPENDED("short_code.suspended"),
+    SHORT_CODE_REACTIVATED("short_code.reactivated"),
+    SHORT_CODE_PAYMENT_SUCCEEDED("short_code.payment_succeeded"),
+    SHORT_CODE_PAYMENT_FAILED("short_code.payment_failed");
 
     private final String value;
 
