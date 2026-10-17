@@ -1,5 +1,11 @@
 # sendly-java
 
+## 4.4.0
+
+### Patch Changes
+
+- **A send whose outcome the API can't confirm is never retried automatically.** A 409 `rcs_send_unconfirmed`, `short_code_send_unconfirmed` or `whatsapp_send_unconfirmed` means the message may already be on its way, so it is thrown on the first attempt: check the message before sending it again. Every other 4xx except a 408 and the 429 rate limits is also thrown on the first attempt, as in the Node SDK. Before, a 4xx with a JSON body (a 403 or 409, for example) was retried with the backoff and returned the same refusal a few seconds later.
+
 ## 4.3.0
 
 ### Minor Changes
