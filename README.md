@@ -117,15 +117,17 @@ The client retries failed requests up to `maxRetries` times with exponential
 backoff (1s, 2s, 4s, …). `AuthenticationException`, `ValidationException`,
 `NotFoundException` and `InsufficientCreditsException` (401, 400, 422, 404 and
 402) are never retried. A 429 is retried only in the cases listed under
-[Rate Limits](#rate-limits). A 5xx, a timeout, a network error and any other
-error status that comes with a JSON body (a 403, 409 or 428, for example) are
-retried with the backoff. A POST's retry carries the same idempotency key, and
-the API replays a recorded 4xx for that key, so retrying a 403 or 409 returns
-the same refusal a few seconds later. `whatsapp_send_unconfirmed` (409), a
-WhatsApp send whose outcome is unknown and that may still be delivered, is
-thrown on the first attempt instead. Three WhatsApp calls are never retried
-except on a 429 rate limit, so a 5xx, a 4xx or a network error from them is
-thrown on the first attempt: `whatsapp().signup().verify()` (every submission
+[Rate Limits](#rate-limits). A 5xx, a timeout, a network error and a 408 that
+comes with a JSON body are retried with the backoff. Every other 4xx (a 403,
+409 or 428, for example) is thrown on the first attempt, as the Node SDK does:
+a POST's retry carries the same idempotency key and the API replays a recorded
+4xx for that key, so a retry could only return the same refusal. That includes
+the 409s `whatsapp_send_unconfirmed`, `rcs_send_unconfirmed` and
+`short_code_send_unconfirmed`, a send whose outcome is unknown and that may
+still be delivered: check before sending it again. An error whose code ends in
+`_send_unconfirmed` is never retried, whatever its status. Three WhatsApp
+calls are never retried except on a 429 rate limit, so a 5xx, a 4xx or a
+network error from them is thrown on the first attempt: `whatsapp().signup().verify()` (every submission
 uses one of the 5 attempts), `whatsapp().signup().create()` with a
 `businessAccountId` (each attempt after a failed one starts a new signup and
 charges its fee again) and `whatsapp().senders().uploadProfilePhoto()`. An

@@ -1,5 +1,6 @@
 package com.sendly;
 
+import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
 import com.sendly.models.BatchMessageItem;
 import com.sendly.models.BatchMessageResponse;
@@ -94,6 +95,13 @@ class IdempotencyTest {
                 .setBody("<!DOCTYPE html>\n<html lang=\"en-US\"><head><title>sendly.live | " + title
                         + "</title></head><body><h1>" + title + "</h1></body></html>")
                 .addHeader("Content-Type", "text/html; charset=UTF-8");
+    }
+
+    private static MockResponse jsonError(int code, String body) {
+        return new MockResponse()
+                .setResponseCode(code)
+                .setBody(body)
+                .addHeader("Content-Type", "application/json");
     }
 
     private static String keyOf(RecordedRequest request) {
@@ -342,11 +350,83 @@ class IdempotencyTest {
     }
 
     @Test
-    void testSend_non5xxRetry_keepsKey() throws Exception {
-        mockServer.enqueue(new MockResponse()
-                .setResponseCode(409)
-                .setBody("{\"message\":\"Resource busy\"}")
-                .addHeader("Content-Type", "application/json"));
+    void testSend_409WithJsonBody_isThrownOnFirstAttempt() {
+        mockServer.enqueue(jsonError(409, "{\"message\":\"Resource busy\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
+        ));
+
+        Sendly retrying = retryingClient(3);
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            retrying.messages().send(new SendMessageRequest("+15551234567", "Hello!")));
+
+        assertEquals(409, e.getStatusCode());
+        assertEquals("Resource busy", e.getMessage());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testSend_403WithJsonBody_isThrownOnFirstAttempt() {
+        mockServer.enqueue(jsonError(403, "{\"error\":\"insufficient_permissions\",\"message\":\"Forbidden\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
+        ));
+
+        Sendly retrying = retryingClient(3);
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            retrying.messages().send(new SendMessageRequest("+15551234567", "Hello!")));
+
+        assertEquals(403, e.getStatusCode());
+        assertEquals("insufficient_permissions", e.getApiErrorCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testSendRcs_unconfirmed_isThrownOnFirstAttempt() {
+        mockServer.enqueue(jsonError(409,
+            "{\"error\":\"rcs_send_unconfirmed\",\"errorCode\":\"E024\","
+                + "\"message\":\"We couldn't confirm whether the RCS network accepted this message. It has been marked failed "
+                + "and refunded, but it may still be delivered. Check before sending it again, or it could arrive twice.\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(rcsMessageJson()));
+
+        Sendly retrying = retryingClient(3);
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            retrying.messages().send(SendRcsMessageRequest.builder()
+                .to("+15551234567")
+                .text("Hello!")
+                .build()));
+
+        assertEquals("rcs_send_unconfirmed", e.getApiErrorCode());
+        assertEquals(409, e.getStatusCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testSendShortCode_unconfirmed_isThrownOnFirstAttempt() {
+        mockServer.enqueue(jsonError(409,
+            "{\"error\":\"short_code_send_unconfirmed\",\"errorCode\":\"E024\","
+                + "\"message\":\"We couldn't confirm whether the carrier network accepted this message. It has been marked failed "
+                + "and refunded, but it may still be delivered. Check before sending it again, or it could arrive twice.\"}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
+        ));
+
+        Sendly retrying = retryingClient(3);
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            retrying.messages().send(SendMessageRequest.builder()
+                .to("+15551234567")
+                .text("Hello!")
+                .from("12345")
+                .build()));
+
+        assertEquals("short_code_send_unconfirmed", e.getApiErrorCode());
+        assertEquals(409, e.getStatusCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testSend_408Retry_keepsKey() throws Exception {
+        mockServer.enqueue(jsonError(408, "{\"message\":\"Request timeout\"}"));
         mockServer.enqueue(TestHelpers.mockSuccess(
             TestHelpers.messageJson("msg_123", "+15551234567", "Hello!", "queued")
         ));

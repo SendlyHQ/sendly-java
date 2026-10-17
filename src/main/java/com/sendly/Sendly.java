@@ -63,8 +63,6 @@ public class Sendly {
     private static final int MAX_RATE_LIMIT_WAIT_SECONDS = 60;
     private static final Set<String> RETRYABLE_RATE_LIMIT_CODES = Set.of(
             "rate_limit_exceeded", "rate_limited", "too_many_concurrent_verifications", "provision_rate_limit");
-    private static final Set<String> FINAL_ERROR_CODES = Set.of(
-            "whatsapp_send_unconfirmed", "whatsapp_verification_failed");
 
     private final String apiKey;
     private final String baseUrl;
@@ -852,8 +850,8 @@ public class Sendly {
                 int status = e.getStatusCode();
                 if (!retryErrors
                         || status >= 200 && status < 300
-                        || status >= 400 && status < 500 && e.getResponseBody() == null
-                        || e.getApiErrorCode() != null && FINAL_ERROR_CODES.contains(e.getApiErrorCode())) {
+                        || status >= 400 && status < 500 && (status != 408 || e.getResponseBody() == null)
+                        || e.getApiErrorCode() != null && e.getApiErrorCode().endsWith("_send_unconfirmed")) {
                     throw e;
                 }
                 lastException = e;
