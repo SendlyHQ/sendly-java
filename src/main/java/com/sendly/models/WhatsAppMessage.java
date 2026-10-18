@@ -21,6 +21,7 @@ public class WhatsAppMessage {
     private WhatsAppMessageDetails whatsapp;
     private String createdAt;
     private Map<String, Object> metadata;
+    private WhatsAppSmsFallback fallback;
 
     public WhatsAppMessage() {}
 
@@ -58,6 +59,9 @@ public class WhatsAppMessage {
             this.createdAt = json.get("createdAt").getAsString();
         }
         this.metadata = parseMetadata(json);
+        if (json.has("fallback") && json.get("fallback").isJsonObject()) {
+            this.fallback = new WhatsAppSmsFallback(json.getAsJsonObject("fallback"));
+        }
     }
 
     private Map<String, Object> parseMetadata(JsonObject json) {
@@ -134,6 +138,18 @@ public class WhatsAppMessage {
     /** Custom JSON metadata attached to the message. */
     public Map<String, Object> getMetadata() { return metadata; }
 
+    /**
+     * What happened to the SMS fallback, when the send asked for
+     * {@code fallbackToSms(true)}; null otherwise. When WhatsApp couldn't take
+     * the message and it went as an SMS instead, {@code getStatus()} is
+     * {@code failed} and {@code getFallback().getStatus()} is {@code sent}
+     * (check with {@link #fellBack()}).
+     */
+    public WhatsAppSmsFallback getFallback() { return fallback; }
+
+    /** Whether the message went as an SMS instead. */
+    public boolean fellBack() { return fallback != null && fallback.isSent(); }
+
     @Override
     public String toString() {
         return "WhatsAppMessage{" +
@@ -142,6 +158,7 @@ public class WhatsAppMessage {
                 ", from='" + from + '\'' +
                 ", status='" + status + '\'' +
                 ", creditsUsed=" + creditsUsed +
+                (fallback != null ? ", fallback=" + fallback : "") +
                 '}';
     }
 }

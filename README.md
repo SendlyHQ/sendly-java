@@ -129,8 +129,7 @@ still be delivered: check before sending it again. An error whose code ends in
 calls are never retried except on a 429 rate limit, so a 5xx, a 4xx or a
 network error from them is thrown on the first attempt: `whatsapp().signup().verify()` (every submission
 uses one of the 5 attempts), `whatsapp().signup().create()` with a
-`businessAccountId` (each attempt after a failed one starts a new signup and
-charges its fee again) and `whatsapp().senders().uploadProfilePhoto()`. An
+`businessAccountId` (each attempt after a failed one starts a new signup) and `whatsapp().senders().uploadProfilePhoto()`. An
 error page that is not JSON, such as a proxy's 502 or 524, is retried like any
 5xx; a 4xx page that is not JSON (a firewall's 403, a proxy's 413) is thrown at
 once. A 5xx that survives every attempt is thrown, so an exception from a 5xx
@@ -1019,10 +1018,10 @@ team workspace, connecting and sender edits need an owner or admin
 (`templates:write`). A missing role returns 403 `insufficient_permissions`.
 
 ```java
-// 1. Connect a number ($19 one-time, no monthly fee). The connect URL must be
+// 1. Connect a number (free, no monthly fee). The connect URL must be
 //    opened by a human: they log in with Facebook in a browser to link their
 //    WhatsApp Business Account. Calling again for a number with a signup in
-//    flight returns that signup without charging again.
+//    flight returns that signup.
 WhatsAppSignupSession signup = client.whatsapp().signup().create("+15125550188");
 System.out.println("Have your user open: " + signup.getConnectUrl());
 
@@ -1030,7 +1029,7 @@ System.out.println("Have your user open: " + signup.getConnectUrl());
 //    "registering" while WhatsApp activates the number. Activation usually
 //    takes a few minutes but can take hours. If it hasn't finished about 6
 //    hours after the session began, the session fails with
-//    registration_timeout and the fee is refunded.
+//    registration_timeout.
 WhatsAppSignup status = client.whatsapp().signup().get(signup.getId());
 System.out.println(status.getStatus());          // initiated | registering | verifying | active | failed
 System.out.println(status.getFailureReasons());  // why, when it failed
@@ -1128,7 +1127,7 @@ WhatsAppConversationalComponents components =
     client.whatsapp().senders().getConversationalComponents("+15125550188");
 
 // 8. Add another number to a connected WhatsApp Business account, with no
-//    Facebook step. Same $19 one-time fee, refunded if it fails. WhatsApp
+//    Facebook step. Free, like a Facebook connection. WhatsApp
 //    sends the number a code by SMS (or "voice"). Take the account id from an
 //    active sender: the list is newest first and a pending sender has none.
 //    A null businessAccountId starts a Facebook connection instead; a blank one is refused.
@@ -1158,6 +1157,83 @@ WhatsAppCallingSettings calling = client.whatsapp().senders().setCalling("+15125
 System.out.println(calling.isCallingEnabled());
 ```
 
+### SMS fallback
+
+With `fallbackToSms(true)`, a WhatsApp message that can't be delivered goes as
+an SMS from the same number instead. Left unset, `fallbackToSms` is not sent
+and the API treats it as `false`.
+
+```java
+import com.google.gson.JsonObject;
+import com.sendly.exceptions.SendlyException;
+import com.sendly.models.Message;
+import com.sendly.models.SendWhatsAppMessageRequest;
+import com.sendly.models.WhatsAppMessage;
+import com.sendly.models.WhatsAppSmsFallback;
+
+try {
+    WhatsAppMessage message = client.messages().send(SendWhatsAppMessageRequest.builder()
+        .to("+12025550143")
+        .from("+15125550188")
+        .text("Your table is ready!")
+        .fallbackToSms(true)
+        .build());
+
+    WhatsAppSmsFallback fallback = message.getFallback();
+    System.out.println(fallback.getStatus());  // "pending", "sent", "failed", "unavailable" or "skipped"
+    System.out.println(fallback.getReason());  // "window_closed", "whatsapp_refused" or "whatsapp_failed"
+    if (message.fellBack()) {                  // the SMS went (message.getStatus() is then "failed")
+        Message sms = client.messages().get(fallback.getMessageId());
+        System.out.println(sms.getFallbackOf()); // the WhatsApp message's id
+    }
+} catch (SendlyException e) {
+    JsonObject body = e.getResponseBody();
+    if ("sms_fallback_unavailable".equals(e.getApiErrorCode())) {
+        // 403: this number can't send SMS to the recipient; nothing was sent
+    } else if ("sms_fallback_not_supported".equals(e.getApiErrorCode())) {
+        // 422: body's "reason" is marketing_template, authentication_template or media_without_caption
+    } else if (body != null && body.has("fallback")) {
+        // 422 whatsapp_window_closed or whatsapp_send_failed: the SMS couldn't go
+        // either. A closed window also carries the WhatsApp message's "id".
+        WhatsAppSmsFallback fallback = new WhatsAppSmsFallback(body.getAsJsonObject("fallback"));
+        System.out.println(e.getApiErrorCode() + ": " + fallback.getStatus() + " " + fallback.getError());
+    } else {
+        throw e;
+    }
+}
+```
+
+- It falls back when the 24-hour window is closed (the SMS goes at once:
+  free-form text and media go only within 24 hours of the customer's last
+  message, templates any time), when WhatsApp refuses the message, or when
+  WhatsApp reports it undeliverable later. Never after WhatsApp reports it
+  delivered or read, and at most once per message.
+- The number must already be able to send SMS to the recipient (a verified
+  toll-free number, or a local number on a 10DLC campaign, to a US or Canada
+  number), or the send is refused with 403 `sms_fallback_unavailable`
+  before anything is sent.
+- Marketing and authentication templates, and media without a caption, can't
+  fall back: 422 `sms_fallback_not_supported`. A utility template falls
+  back as its text header, body and footer with the variables filled in, and
+  its URL and phone buttons as `label: target`; quick replies are dropped and
+  listed in `getContentDropped()`.
+- Billing: the WhatsApp charge is refunded (a closed window is never charged)
+  and the SMS is billed as an SMS. A message that fell back at once comes
+  back with `getStatus()` `"failed"`, `getCreditsUsed()` 0 and `getFallback().getStatus()` `"sent"`; `getFallback().getCreditsUsed()` is
+  what the SMS cost.
+- No SMS goes on a 409 `whatsapp_send_unconfirmed` or a 503
+  `whatsapp_send_failed`. The status is `"unavailable"` when SMS rules stop it
+  (the contact opted out, a promotional-looking text in the recipient's quiet
+  hours, restricted content), with the reason in `getError()`, and
+  `"skipped"` for a WhatsApp error an SMS can't fix.
+- There is no time-based fallback: a message WhatsApp accepted but hasn't
+  delivered, for example to a phone that is off, stays `"pending"`, and no SMS
+  goes unless WhatsApp later reports a failure.
+- `messages().get()` and `messages().list()` return the same `getFallback()` on the WhatsApp message, so check a
+  pending one later. The SMS carries `getFallbackOf()`, the WhatsApp message's id.
+
+Guide: [Send WhatsApp with an SMS Fallback](https://sendly.live/docs/whatsapp/send-with-fallback).
+
 Meta has paused marketing-template delivery to US (+1) numbers.
 
 Pricing: free-form text or media inside the 24-hour window costs 1 credit
@@ -1179,55 +1255,59 @@ Refusals to plan for:
   unavailable for now, nothing was charged, and the body carries
   `retryAfter: 3600` with a `Retry-After: 3600` header. The client retries it
   like any 5xx before throwing it. No send returns it.
-- A failed connection: if the connection fails, the $19 fee is refunded
-  automatically. Once a number has connected there is no refund, and a later
-  disconnect gets nothing back.
-- `whatsapp_signup_limit_reached` (429): 5 charged signups failed in the last
+- Connecting a number is free, and so is a new attempt after a failed one.
+- `whatsapp_signup_limit_reached` (429): 5 signups failed in the last
   24 hours. It is thrown at once; try again the next day.
 - `whatsapp_send_failed` on a send: a 422 means the carrier refused the message
   and it is final (cached under the idempotency key and replayed for 24
-  hours). A 502 means the message provably never reached the carrier, so it
-  was not sent and is safe to send again; it is never cached, and the client
-  retries it under the same idempotency key. The credits of a failed send are
-  refunded.
+  hours). A 503 means the message provably never reached WhatsApp, so it was
+  not sent and is safe to resend under the same idempotency key; it is never
+  cached, and the client retries it automatically, up to 3 times under the
+  same key, before throwing. The credits of a failed send are refunded.
 - `whatsapp_send_unconfirmed` (409) on a send: the outcome is unknown. The
   message was marked failed and refunded but may still be delivered, so check
   before sending it again (it could arrive twice). It is cached under the
   idempotency key and is not retried automatically.
+- `sms_fallback_unavailable` (403) and `sms_fallback_not_supported` (422,
+  with `reason` in `getResponseBody()`: `marketing_template`,
+  `authentication_template` or `media_without_caption`) on a send with
+  `fallbackToSms(true)`; see [SMS fallback](#sms-fallback). A 422
+  `whatsapp_window_closed` or `whatsapp_send_failed` on such a send means the
+  SMS couldn't go either, and `getResponseBody()` carries its `fallback`.
 - `whatsapp_sender_not_connected` (404) from `templates().create()`, checked
   before anything else, and from every `senders()` method that takes a number.
 - Profile photo: 400 `whatsapp_profile_photo_invalid` (not a JPEG or PNG), 413
-  `whatsapp_profile_photo_too_large` (over 5 MB), 502
+  `whatsapp_profile_photo_too_large` (over 5 MB), 503
   `whatsapp_profile_update_failed` (fix the image and try again).
 - Conversational components: 400 `invalid_request` naming the rule broken
   (at most 4 ice breakers of 1-80 characters; at most 30 commands of letters,
   digits or underscores up to 32 characters, each with a 1-256 character
-  description; no duplicates), 502
+  description; no duplicates), 503
   `whatsapp_conversational_components_fetch_failed` or
   `whatsapp_conversational_components_update_failed`.
 - Calling: 409 `voice_not_enabled` (switch voice on for the number first), 422
   `whatsapp_calling_unavailable` (Meta requires the account to be allowed to
-  message at least 2,000 people a day and an approved display name), 502
+  message at least 2,000 people a day and an approved display name), 503
   `whatsapp_calling_update_failed`. `isOutboundCallingAllowed()` is false for
   +1, +20, +84 and +234 numbers.
 - Adding a number by code: 404 `whatsapp_business_account_not_found`, 400
   `display_name_required`, 409 `whatsapp_signup_in_progress` or
   `whatsapp_already_enabled`, and `whatsapp_verification_start_failed` (422
-  when WhatsApp refused to send the code, 502 when it could not be reached;
-  the signup failed and the fee is refunded). Neither this `create()` nor
+  when WhatsApp refused to send the code, 503 when it could not be reached;
+  the signup failed). Neither this `create()` nor
   `verify()` is retried automatically except on a 429 rate limit. A Facebook
   signup for a number that is verifying gets 409
   `whatsapp_verification_in_progress`.
 - `verify()`: 400 `invalid_verification_code` (not 6 digits), 422
   `whatsapp_verification_code_invalid` with `attemptsRemaining` in
   `getResponseBody()`, 409 `whatsapp_verification_failed` after 5 wrong codes
-  (the signup failed and the fee is refunded; not retried), 409
-  `whatsapp_verification_busy` (try again), 502
-  `whatsapp_verification_unavailable` (not counted as an attempt), 502
+  (the signup failed; not retried), 409
+  `whatsapp_verification_busy` (try again), 503
+  `whatsapp_verification_unavailable` (not counted as an attempt), 503
   `whatsapp_activation_pending` (the code was accepted; check back), 409
   `signup_not_active`.
 - `resend()`: 429 `whatsapp_verification_resend_too_soon` with
-  `getRetryAfter()` (thrown at once), 422 or 502
+  `getRetryAfter()` (thrown at once), 422 or 503
   `whatsapp_verification_resend_failed`, 409 `signup_not_active`.
 - A failed signup's `getFailureReasons()` can also be
   `verification_start_failed`, `verification_failed` or
@@ -1622,8 +1702,8 @@ System.out.println(deleted.isDeleted()); // true
 ```
 
 A mode alone is enough: `VoiceMode.RING_DASHBOARD` or `VoiceMode.AGENT`
-switches voice on, so it can fail the way switching on does (502
-`voice_attach_failed`, 503 `voice_unavailable`), and `VoiceMode.NONE` switches
+switches voice on, so it can fail the way switching on does (503
+`voice_attach_failed` or `voice_unavailable`), and `VoiceMode.NONE` switches
 it off. `voiceEnabled(false)` wins over any mode, and `VoiceMode.NONE` with
 `voiceEnabled(true)` becomes `ring_dashboard`. An empty
 `agentId` clears the stored agent, and an empty `transferTo` clears that tool.
@@ -1637,8 +1717,8 @@ Refusals carry `getApiErrorCode()` as usual: 400 `ValidationException`
 `e911_not_applicable`), 404 `NotFoundException` (`number_not_found`,
 `agent_not_found`), 409 `SendlyException` (`agent_disabled`, `agent_limit`,
 `agent_in_use`), 422 `ValidationException` (`invalid_address`, the address
-couldn't be validated), 502 `SendlyException` (`voice_attach_failed`,
-`carrier_refused`) and 503 `SendlyException` (`voice_unavailable`). A 5xx is
+couldn't be validated) and 503 `SendlyException` (`voice_attach_failed`,
+`carrier_refused`, `voice_unavailable`). A 5xx is
 thrown only after the client has already retried it on its own. Not every
 `carrier_refused` is worth retrying: when the message says the number couldn't
 be found for emergency registration, retrying won't help, so contact support;

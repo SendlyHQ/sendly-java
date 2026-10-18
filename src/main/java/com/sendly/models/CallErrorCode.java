@@ -37,10 +37,10 @@ public final class CallErrorCode {
     public static final String INVALID_ADDRESS = "invalid_address";
     /** 400: emergency addresses apply to US and Canadian numbers only. */
     public static final String E911_NOT_APPLICABLE = "e911_not_applicable";
-    /** 502: voice could not be switched on for the number; try again. */
+    /** 503: voice could not be switched on for the number; try again. */
     public static final String VOICE_ATTACH_FAILED = "voice_attach_failed";
     /**
-     * 502: the emergency address registration was refused. Permanent when the
+     * 503: the emergency address registration was refused. Permanent when the
      * message says the number couldn't be found for emergency registration
      * (contact support); otherwise try again later.
      */

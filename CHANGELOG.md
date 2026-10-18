@@ -1,5 +1,15 @@
 # sendly-java
 
+## 4.5.0
+
+### Minor Changes
+
+- **WhatsApp to SMS fallback.** `SendWhatsAppMessageRequest.Builder.fallbackToSms(Boolean)` sends `fallbackToSms`, and leaves it out when null. When WhatsApp can't deliver the message (the 24-hour window is closed, WhatsApp refuses it, or reports it undeliverable later), it goes as an SMS from the same number, billed as an SMS. The new `WhatsAppSmsFallback` (`getChannel()`, `getStatus()`, `getReason()`, `getMessageId()`, `getCreditsUsed()`, `getError()`, `getContentDropped()`, with `isPending()` and `isSent()`, and `STATUS_` and `REASON_` constants) says what happened: it is `WhatsAppMessage.getFallback()`, and `WhatsAppMessage.fellBack()` is true when the SMS went. When the SMS went in place of the WhatsApp message, `getStatus()` is `"failed"` and `getFallback().getStatus()` is `"sent"`. `Message` gains `getFallback()` (on a WhatsApp message from `messages().get()` or `list()`) and `getFallbackOf()` (on the SMS, the id of the WhatsApp message it replaced). The number must already be able to send SMS to the recipient (US and Canada), or the API answers 403 `sms_fallback_unavailable`; marketing and authentication templates, and media without a caption, get 422 `sms_fallback_not_supported`. Both codes are on `getApiErrorCode()`.
+
+### Patch Changes
+
+- Docs give 503, the status the API sends, instead of 502 for the WhatsApp and voice errors raised when WhatsApp or the carrier couldn't be reached: `whatsapp_send_failed` when the message never reached WhatsApp (not sent, and safe to send again with the same idempotency key), the WhatsApp signup, profile, conversational-components and calling errors, `voice_attach_failed` and `carrier_refused`. The API answers every 502 as a 503 with a `Sendly-Upstream-Status: 502` header. Nothing changes at runtime.
+
 ## 4.4.0
 
 ### Patch Changes

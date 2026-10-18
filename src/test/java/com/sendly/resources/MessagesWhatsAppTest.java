@@ -3,8 +3,10 @@ package com.sendly.resources;
 import com.sendly.Sendly;
 import com.sendly.TestHelpers;
 import com.sendly.exceptions.*;
+import com.sendly.models.Message;
 import com.sendly.models.SendWhatsAppMessageRequest;
 import com.sendly.models.WhatsAppMessage;
+import com.sendly.models.WhatsAppSmsFallback;
 import com.sendly.models.WhatsAppTemplateButtonVariables;
 import com.sendly.models.WhatsAppTemplateSendParams;
 import okhttp3.mockwebserver.MockResponse;
@@ -284,5 +286,160 @@ class MessagesWhatsAppTest {
         assertEquals("whatsapp_send_unconfirmed", e.getApiErrorCode());
         assertEquals(409, e.getStatusCode());
         assertEquals(1, mockServer.getRequestCount());
+    }
+
+    // ==================== SMS fallback ====================
+
+    private SendWhatsAppMessageRequest.Builder fallbackRequest() {
+        return SendWhatsAppMessageRequest.builder()
+                .to("+12025550143")
+                .from("+15125550188")
+                .text("Your table is ready!");
+    }
+
+    @Test
+    void testSendWhatsApp_fallbackToSmsTrue_isSent() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(textMessageJson()));
+
+        client.messages().send(fallbackRequest().fallbackToSms(true).build());
+
+        String body = mockServer.takeRequest().getBody().readUtf8();
+        assertTrue(body.contains("\"fallbackToSms\":true"));
+        assertTrue(body.contains("\"channel\":\"whatsapp\""));
+    }
+
+    @Test
+    void testSendWhatsApp_fallbackToSmsFalse_isSent() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(textMessageJson()));
+
+        client.messages().send(fallbackRequest().fallbackToSms(false).build());
+
+        String body = mockServer.takeRequest().getBody().readUtf8();
+        assertTrue(body.contains("\"fallbackToSms\":false"));
+    }
+
+    @Test
+    void testSendWhatsApp_fallbackToSmsUnset_isOmitted() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(textMessageJson()));
+
+        client.messages().send(fallbackRequest().build());
+
+        String body = mockServer.takeRequest().getBody().readUtf8();
+        assertFalse(body.contains("fallbackToSms"));
+    }
+
+    @Test
+    void testSendWhatsApp_fellBack_parsesFallback() throws Exception {
+        mockServer.enqueue(new MockResponse().setResponseCode(201).addHeader("Content-Type", "application/json").setBody(
+            "{\"id\":\"msg_wa_9\",\"channel\":\"whatsapp\",\"message_format\":\"whatsapp\"," +
+            "\"messageFormat\":\"whatsapp\",\"to\":\"+12025550143\",\"from\":\"+15125550188\"," +
+            "\"text\":\"Your table is ready!\",\"status\":\"failed\",\"direction\":\"outbound\"," +
+            "\"segments\":1,\"creditsUsed\":0,\"whatsapp\":{\"kind\":\"text\",\"messageId\":null}," +
+            "\"createdAt\":\"2026-10-17T10:00:00.000Z\",\"metadata\":{}," +
+            "\"fallback\":{\"channel\":\"sms\",\"status\":\"sent\",\"reason\":\"window_closed\"," +
+            "\"messageId\":\"msg_sms_9\",\"creditsUsed\":2,\"contentDropped\":[\"quick_replies\"]}}"));
+
+        WhatsAppMessage message = client.messages().send(fallbackRequest().fallbackToSms(true).build());
+
+        assertEquals("failed", message.getStatus());
+        assertEquals(0, message.getCreditsUsed());
+        assertTrue(message.fellBack());
+        WhatsAppSmsFallback fallback = message.getFallback();
+        assertNotNull(fallback);
+        assertEquals("sms", fallback.getChannel());
+        assertEquals(WhatsAppSmsFallback.STATUS_SENT, fallback.getStatus());
+        assertTrue(fallback.isSent());
+        assertFalse(fallback.isPending());
+        assertEquals(WhatsAppSmsFallback.REASON_WINDOW_CLOSED, fallback.getReason());
+        assertEquals("msg_sms_9", fallback.getMessageId());
+        assertEquals(Integer.valueOf(2), fallback.getCreditsUsed());
+        assertNull(fallback.getError());
+        assertEquals(List.of("quick_replies"), fallback.getContentDropped());
+    }
+
+    @Test
+    void testSendWhatsApp_pendingFallback_hasNotFallenBack() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_wa_10\",\"channel\":\"whatsapp\",\"status\":\"queued\"," +
+            "\"fallback\":{\"channel\":\"sms\",\"status\":\"pending\"}}"));
+
+        WhatsAppMessage message = client.messages().send(fallbackRequest().fallbackToSms(true).build());
+
+        assertFalse(message.fellBack());
+        assertTrue(message.getFallback().isPending());
+        assertNull(message.getFallback().getReason());
+        assertNull(message.getFallback().getMessageId());
+        assertNull(message.getFallback().getCreditsUsed());
+        assertTrue(message.getFallback().getContentDropped().isEmpty());
+    }
+
+    @Test
+    void testSendWhatsApp_withoutFallback_hasNoFallback() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(textMessageJson()));
+
+        WhatsAppMessage message = client.messages().send(fallbackRequest().build());
+
+        assertNull(message.getFallback());
+        assertFalse(message.fellBack());
+    }
+
+    @Test
+    void testSendWhatsApp_smsFallbackUnavailable_carriesCode() {
+        mockServer.enqueue(new MockResponse().setResponseCode(403).addHeader("Content-Type", "application/json").setBody(
+            "{\"error\":\"sms_fallback_unavailable\"," +
+            "\"message\":\"This number can't send SMS to this recipient.\"," +
+            "\"suggestion\":\"Send without fallbackToSms, or make sure this number can send SMS to this recipient first.\"}"));
+
+        SendlyException e = assertThrows(SendlyException.class, () ->
+            client.messages().send(fallbackRequest().fallbackToSms(true).build()));
+        assertEquals(403, e.getStatusCode());
+        assertEquals("sms_fallback_unavailable", e.getApiErrorCode());
+        assertEquals("This number can't send SMS to this recipient.", e.getMessage());
+        assertEquals("Send without fallbackToSms, or make sure this number can send SMS to this recipient first.",
+            e.getResponseBody().get("suggestion").getAsString());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testSendWhatsApp_smsFallbackNotSupported_carriesCode() {
+        mockServer.enqueue(new MockResponse().setResponseCode(422).addHeader("Content-Type", "application/json").setBody(
+            "{\"error\":\"sms_fallback_not_supported\",\"reason\":\"marketing_template\"," +
+            "\"message\":\"Marketing templates can't fall back to SMS: SMS marketing needs its own consent. Send without fallbackToSms.\"}"));
+
+        ValidationException e = assertThrows(ValidationException.class, () ->
+            client.messages().send(SendWhatsAppMessageRequest.builder()
+                .to("+12025550143")
+                .from("+15125550188")
+                .template(new WhatsAppTemplateSendParams("spring_sale", "en_US", Map.of()))
+                .fallbackToSms(true)
+                .build()));
+        assertEquals(422, e.getStatusCode());
+        assertEquals("sms_fallback_not_supported", e.getApiErrorCode());
+        assertEquals("marketing_template", e.getResponseBody().get("reason").getAsString());
+    }
+
+    @Test
+    void testGetMessage_whatsAppFallbackAndSmsFallbackOf() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_wa_9\",\"to\":\"+12025550143\",\"from\":\"+15125550188\"," +
+            "\"text\":\"Your table is ready!\",\"status\":\"failed\",\"direction\":\"outbound\"," +
+            "\"messageFormat\":\"whatsapp\",\"creditsUsed\":0," +
+            "\"fallback\":{\"channel\":\"sms\",\"status\":\"sent\",\"reason\":\"whatsapp_refused\"," +
+            "\"messageId\":\"msg_sms_9\",\"creditsUsed\":2}}"));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_sms_9\",\"to\":\"+12025550143\",\"from\":\"+15125550188\"," +
+            "\"text\":\"Your table is ready!\",\"status\":\"delivered\",\"direction\":\"outbound\"," +
+            "\"messageFormat\":\"sms\",\"creditsUsed\":2,\"fallbackOf\":\"msg_wa_9\"}"));
+
+        Message whatsapp = client.messages().get("msg_wa_9");
+        assertNotNull(whatsapp.getFallback());
+        assertTrue(whatsapp.getFallback().isSent());
+        assertEquals(WhatsAppSmsFallback.REASON_WHATSAPP_REFUSED, whatsapp.getFallback().getReason());
+        assertEquals("msg_sms_9", whatsapp.getFallback().getMessageId());
+        assertNull(whatsapp.getFallbackOf());
+
+        Message sms = client.messages().get("msg_sms_9");
+        assertNull(sms.getFallback());
+        assertEquals("msg_wa_9", sms.getFallbackOf());
     }
 }

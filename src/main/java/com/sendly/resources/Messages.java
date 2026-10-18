@@ -116,7 +116,7 @@ public class Messages {
      * @throws SendlyException if the request fails; {@code whatsapp_send_failed}
      *         is a 422 {@code ValidationException} when WhatsApp refused the
      *         message (final, not retried; cached under the idempotency key
-     *         and replayed for 24 hours) and a 502 when the message provably
+     *         and replayed for 24 hours) and a 503 when the message provably
      *         never reached the carrier, so it was not sent and is safe to
      *         send again (never cached; retried like any 5xx under the same
      *         idempotency key); neither is charged. A 409
@@ -125,7 +125,12 @@ public class Messages {
      *         delivered, so check before sending it again (it could arrive
      *         twice). It is cached under the idempotency key and is thrown on
      *         the first attempt, never retried automatically. No send returns
-     *         503 {@code whatsapp_unavailable}.
+     *         503 {@code whatsapp_unavailable}. With {@code fallbackToSms(true)},
+     *         a 403 {@code sms_fallback_unavailable} means the number can't
+     *         send SMS to the recipient, and a 422
+     *         {@code sms_fallback_not_supported} that the message can't fall
+     *         back (a marketing or authentication template, or media without a
+     *         caption); read the code with {@code getApiErrorCode()}.
      */
     public WhatsAppMessage send(SendWhatsAppMessageRequest request) throws SendlyException {
         return send(request, null);

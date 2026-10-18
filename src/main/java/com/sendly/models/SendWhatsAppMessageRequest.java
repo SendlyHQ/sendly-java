@@ -32,6 +32,7 @@ public class SendWhatsAppMessageRequest {
     private final List<String> mediaUrls;
     private final WhatsAppTemplateSendParams template;
     private final Map<String, Object> metadata;
+    private final Boolean fallbackToSms;
 
     private SendWhatsAppMessageRequest(Builder builder) {
         this.to = builder.to;
@@ -40,6 +41,7 @@ public class SendWhatsAppMessageRequest {
         this.mediaUrls = builder.mediaUrls;
         this.template = builder.template;
         this.metadata = builder.metadata;
+        this.fallbackToSms = builder.fallbackToSms;
     }
 
     /** Always "whatsapp". */
@@ -50,6 +52,7 @@ public class SendWhatsAppMessageRequest {
     public List<String> getMediaUrls() { return mediaUrls; }
     public WhatsAppTemplateSendParams getTemplate() { return template; }
     public Map<String, Object> getMetadata() { return metadata; }
+    public Boolean getFallbackToSms() { return fallbackToSms; }
 
     public static Builder builder() {
         return new Builder();
@@ -62,6 +65,7 @@ public class SendWhatsAppMessageRequest {
         private List<String> mediaUrls;
         private WhatsAppTemplateSendParams template;
         private Map<String, Object> metadata;
+        private Boolean fallbackToSms;
 
         /** Destination phone number in E.164 format (e.g., +15551234567). */
         public Builder to(String to) {
@@ -107,6 +111,22 @@ public class SendWhatsAppMessageRequest {
         /** Custom JSON metadata to attach to the message (max 4KB). */
         public Builder metadata(Map<String, Object> metadata) {
             this.metadata = metadata;
+            return this;
+        }
+
+        /**
+         * Defaults to {@code false}. With {@code true}, a message WhatsApp
+         * can't deliver goes as an SMS from the same number, billed as one:
+         * when the 24-hour window is closed, when WhatsApp refuses it, or when
+         * WhatsApp reports it undeliverable later. The number must be able to
+         * send SMS to the recipient (US and Canada only), or the API responds
+         * 403 {@code sms_fallback_unavailable}. Marketing and authentication
+         * templates, and media without a caption, can't fall back (422
+         * {@code sms_fallback_not_supported}). See
+         * {@code WhatsAppMessage.getFallback()}. Left null, it is not sent.
+         */
+        public Builder fallbackToSms(Boolean fallbackToSms) {
+            this.fallbackToSms = fallbackToSms;
             return this;
         }
 

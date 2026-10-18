@@ -151,10 +151,10 @@ public class VoiceResource {
          *         {@code invalid_voice_mode} or {@code agent_required} when
          *         {@code agent} mode has no agent, 404
          *         {@code number_not_found} or {@code agent_not_found}, 409
-         *         {@code agent_disabled} when the agent is switched off, 502
+         *         {@code agent_disabled} when the agent is switched off, 503
          *         {@code voice_attach_failed} when voice couldn't be switched
-         *         on (try again), 503 {@code voice_unavailable}; the 502 and
-         *         503 can follow a mode alone on a number whose voice is off
+         *         on (try again), 503 {@code voice_unavailable}; either 503
+         *         can follow a mode alone on a number whose voice is off
          */
         public VoiceNumber update(String number, UpdateVoiceNumberRequest request) throws SendlyException {
             return update(number, request, null);
@@ -198,7 +198,7 @@ public class VoiceResource {
          *         for a malformed field (400) or an address that couldn't be
          *         validated (422), 400 {@code e911_not_applicable} for a
          *         number outside the US and Canada, 404
-         *         {@code number_not_found}, 502 {@code carrier_refused} when
+         *         {@code number_not_found}, 503 {@code carrier_refused} when
          *         the registration was refused, thrown after the client has
          *         already retried the 5xx on its own. When the message says
          *         the number couldn't be found for emergency registration,

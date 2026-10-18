@@ -65,8 +65,8 @@ public class WhatsAppSignup {
      * Current signup status: {@code initiated}, {@code registering}
      * (WhatsApp is activating the number; activation usually takes a few
      * minutes but can take hours, and a session that hasn't finished about 6
-     * hours after it began fails with {@code registration_timeout} and the
-     * fee is refunded), {@code verifying} (a number being added to a
+     * hours after it began fails with {@code registration_timeout}),
+     * {@code verifying} (a number being added to a
      * connected WhatsApp Business Account is waiting for the code WhatsApp
      * sent it; submit it with {@code signup().verify(id, code)}),
      * {@code active}, or {@code failed}. The API does not send
@@ -87,7 +87,8 @@ public class WhatsAppSignup {
 
     /**
      * Why the signup failed, when status is {@code failed}; null otherwise.
-     * Holds one code: {@code setup_fee_payment_failed},
+     * Holds one code: {@code setup_fee_payment_failed} (the connection
+     * couldn't be started),
      * {@code signup_abandoned}, {@code meta_exchange_failed},
      * {@code registration_failed}, {@code waba_already_connected},
      * {@code waba_mismatch} (the WhatsApp Business Account chosen in the
@@ -96,8 +97,7 @@ public class WhatsAppSignup {
      * after the session began), {@code phone_number_mismatch},
      * {@code verification_start_failed} (WhatsApp could not be asked to
      * send the code), {@code verification_failed} (too many wrong codes) or
-     * {@code verification_expired} (no code was accepted in time). If the
-     * connection fails, the $19 fee is refunded automatically.
+     * {@code verification_expired} (no code was accepted in time).
      */
     public List<String> getFailureReasons() { return failureReasons; }
 
@@ -123,7 +123,7 @@ public class WhatsAppSignup {
      * has arrived since the signup started, so after a resend it still
      * shows the earlier code until the new one arrives. Once WhatsApp has
      * checked a code, only a code that arrived after the last submission or
-     * resend is returned. A submission answered with 502
+     * resend is returned. A submission answered with 503
      * {@code whatsapp_verification_unavailable} is not counted, so the same
      * unchecked code can come back, and submitting it again is safe.
      */

@@ -82,6 +82,10 @@ public class Message {
     @SerializedName("ai_metadata")
     private final JsonObject aiMetadata;
 
+    private final WhatsAppSmsFallback fallback;
+
+    private final String fallbackOf;
+
     /**
      * Create a Message from a JSON object.
      */
@@ -111,6 +115,9 @@ public class Message {
         this.metadata = parseMetadata(json);
         this.mediaUrls = parseStringArray(json, "media_urls", "mediaUrls");
         this.aiMetadata = parseJsonObject(json, "ai_metadata", "aiMetadata");
+        this.fallback = json.has("fallback") && json.get("fallback").isJsonObject()
+                ? new WhatsAppSmsFallback(json.getAsJsonObject("fallback")) : null;
+        this.fallbackOf = getStringOrNull(json, "fallbackOf", "fallback_of");
     }
 
     private String errorMessageOf(JsonObject json) {
@@ -293,6 +300,22 @@ public class Message {
 
     public JsonObject getAiMetadata() {
         return aiMetadata;
+    }
+
+    /**
+     * On a WhatsApp message sent with {@code fallbackToSms(true)}, what
+     * happened to its SMS fallback; null otherwise.
+     */
+    public WhatsAppSmsFallback getFallback() {
+        return fallback;
+    }
+
+    /**
+     * On an SMS fallback, the id of the WhatsApp message it replaced; null
+     * otherwise.
+     */
+    public String getFallbackOf() {
+        return fallbackOf;
     }
 
     // Helper methods
