@@ -65,8 +65,8 @@ public class WhatsAppSignup {
      * Current signup status: {@code initiated}, {@code registering}
      * (WhatsApp is activating the number; activation usually takes a few
      * minutes but can take hours, and a session that hasn't finished about 6
-     * hours after it began fails with {@code registration_timeout}),
-     * {@code verifying} (a number being added to a
+     * hours after it began fails with {@code registration_timeout} and the
+     * fee is refunded), {@code verifying} (a number being added to a
      * connected WhatsApp Business Account is waiting for the code WhatsApp
      * sent it; submit it with {@code signup().verify(id, code)}),
      * {@code active}, or {@code failed}. The API does not send
@@ -87,8 +87,8 @@ public class WhatsAppSignup {
 
     /**
      * Why the signup failed, when status is {@code failed}; null otherwise.
-     * Holds one code: {@code setup_fee_payment_failed} (the connection
-     * couldn't be started),
+     * Holds one code: {@code setup_fee_payment_failed} (the $9.99
+     * connection fee couldn't be charged),
      * {@code signup_abandoned}, {@code meta_exchange_failed},
      * {@code registration_failed}, {@code waba_already_connected},
      * {@code waba_mismatch} (the WhatsApp Business Account chosen in the
@@ -97,7 +97,8 @@ public class WhatsAppSignup {
      * after the session began), {@code phone_number_mismatch},
      * {@code verification_start_failed} (WhatsApp could not be asked to
      * send the code), {@code verification_failed} (too many wrong codes) or
-     * {@code verification_expired} (no code was accepted in time).
+     * {@code verification_expired} (no code was accepted in time). If the
+     * connection fails, the $9.99 fee is refunded automatically.
      */
     public List<String> getFailureReasons() { return failureReasons; }
 

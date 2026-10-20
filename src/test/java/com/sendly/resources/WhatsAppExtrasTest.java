@@ -469,7 +469,8 @@ class WhatsAppExtrasTest {
         Sendly retrying = clientWithRetries(3);
         mockServer.enqueue(apiError(502,
             "{\"error\":\"whatsapp_verification_start_failed\"," +
-            "\"message\":\"WhatsApp couldn't start verifying this number. Please try again shortly.\"}"));
+            "\"message\":\"WhatsApp couldn't start verifying this number. Any setup fee is refunded automatically. " +
+            "Please try again shortly.\"}"));
         mockServer.enqueue(TestHelpers.mockSuccess(VERIFYING_SIGNUP_JSON).setResponseCode(201));
 
         SendlyException e = assertThrows(SendlyException.class, () ->
@@ -487,7 +488,7 @@ class WhatsAppExtrasTest {
         Sendly retrying = clientWithRetries(3);
         mockServer.enqueue(apiError(500,
             "{\"error\":\"internal_error\",\"message\":\"Something went wrong asking WhatsApp for the code. " +
-            "Please try again.\"}"));
+            "Any setup fee is refunded automatically. Please try again.\"}"));
         mockServer.enqueue(TestHelpers.mockSuccess(VERIFYING_SIGNUP_JSON).setResponseCode(201));
 
         SendlyException e = assertThrows(SendlyException.class, () ->
@@ -622,7 +623,7 @@ class WhatsAppExtrasTest {
         Sendly retrying = clientWithRetries(3);
         mockServer.enqueue(apiError(409,
             "{\"error\":\"whatsapp_verification_failed\"," +
-            "\"message\":\"Too many wrong codes. Start again to retry.\"}"));
+            "\"message\":\"Too many wrong codes. Any setup fee is refunded automatically. Start again to retry.\"}"));
         mockServer.enqueue(apiError(409,
             "{\"error\":\"signup_not_active\"," +
             "\"message\":\"This connection isn't waiting for a verification code. Start again to retry.\"}"));

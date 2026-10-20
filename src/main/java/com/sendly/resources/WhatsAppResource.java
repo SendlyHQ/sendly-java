@@ -38,7 +38,10 @@ import java.util.regex.Pattern;
  * Meta-reviewed message templates, and send via
  * {@code messages().send(SendWhatsAppMessageRequest)}.
  * <p>
- * Connecting a number is free (no setup or monthly fee). The first
+ * Connecting a number is a one-time $9.99 connection fee per number (no
+ * monthly fee), charged to your card when you start connecting it, refunded
+ * automatically if the connection fails and not refundable once the number
+ * is connected. The first
  * number ends with a human step: {@code signup().create()} returns a
  * {@code connectUrl} that a person must open in a browser and log in with
  * Facebook to link their WhatsApp Business Account. Hand the URL to your
@@ -87,7 +90,7 @@ import java.util.regex.Pattern;
  * and every method on this resource gets 404 {@code not_found}.
  *
  * <pre>{@code
- * // 1. Connect a number (free, no monthly fee). The connect URL
+ * // 1. Connect a number ($9.99 one-time, no monthly fee). The connect URL
  * //    must be opened by a human — they log in with Facebook in a browser.
  * WhatsAppSignupSession signup = client.whatsapp().signup().create("+15559876543");
  * System.out.println("Have your user open: " + signup.getConnectUrl());
@@ -196,21 +199,24 @@ public class WhatsAppResource {
         /**
          * Start connecting a number to WhatsApp.
          * <p>
-         * Connecting a number is free. Returns a
-         * {@code connectUrl}. Completing the connection requires a human: hand
+         * Charges a one-time $9.99 connection fee per number (no monthly fee)
+         * to your card and returns a {@code connectUrl}. Completing the connection requires a human: hand
          * the URL to your user — they open it in a browser and log in with
          * Facebook to link their WhatsApp Business Account. Then poll
          * {@link #get(String)} until the status is {@code active}.
          * <p>
          * Calling again for a number with an in-flight signup returns the
-         * existing signup (same {@code connectUrl}).
+         * existing signup (same {@code connectUrl}) without charging again.
          * Requires a live API key with the {@code whatsapp:write} scope (a
          * test key gets 403 {@code whatsapp_requires_live_key}) and, in a team
          * workspace, an owner or admin ({@code settings:write}). After the
          * Facebook step the signup stays {@code registering} while WhatsApp
          * activates the number. Activation usually takes a few minutes but can
          * take hours. If it hasn't finished about 6 hours after the session
-         * began, the session fails with {@code registration_timeout}.
+         * began, the session fails with {@code registration_timeout} and the
+         * fee is refunded. If the connection fails, the $9.99 fee is refunded
+         * automatically; once the number is connected it is not refundable,
+         * and a later disconnect gets nothing back.
          *
          * @param phoneNumber The number to connect, in E.164 format. Must be an
          *                    active number in your workspace (provisioned,
@@ -218,16 +224,17 @@ public class WhatsAppResource {
          * @return The signup with its {@code connectUrl}
          * @throws SendlyException if the request fails; {@code
          *                         whatsapp_unavailable} (503) while WhatsApp
-         *                         connections are unavailable, with
-         *                         {@code retryAfter} 3600 in the
+         *                         connections are unavailable, with nothing
+         *                         charged, {@code retryAfter} 3600 in the
          *                         response body and a
          *                         {@code Retry-After: 3600} header, retried
          *                         like any 5xx before it is thrown. Only
          *                         signup returns it; no send does.
          * @throws com.sendly.exceptions.RateLimitException {@code
          *                         whatsapp_signup_limit_reached} (429) after 5
-         *                         failed signups (or 20 cancelled) in 24
-         *                         hours; not retried, try again the next day
+         *                         failed, charged signups (or 20 cancelled) in
+         *                         24 hours; not retried, try again the next
+         *                         day
          */
         public WhatsAppSignupSession create(String phoneNumber) throws SendlyException {
             validatePhone(phoneNumber);
@@ -245,17 +252,19 @@ public class WhatsAppResource {
          * <p>
          * With only {@code phoneNumber} this is {@link #create(String)}.
          * With {@code businessAccountId} there is no Facebook step: the same
-         * number checks run, it is free too, and WhatsApp sends the number a
-         * 6-digit code by SMS or, with
+         * number checks run, the same one-time $9.99 fee is charged (before
+         * the code is requested, and refunded automatically if the signup
+         * fails), and WhatsApp sends the number a 6-digit code by SMS or, with
          * {@code verificationMethod("voice")}, a voice call. The signup comes
          * back {@code verifying} with no {@code connectUrl}; submit the code
          * with {@link #verify(String, String)}. A code sent by SMS arrives on
          * the number itself, so once it has arrived
          * {@code get(id).getVerificationCode()} returns it. Calling again for
          * a number that is already verifying returns that signup without
-         * sending a second code, with two exceptions. A verifying signup more
-         * than 3 hours old is failed with {@code verification_expired} and a
-         * new signup is started and sent a new code. If the first call
+         * charging again or sending a second code, with two exceptions. A
+         * verifying signup more than 3 hours old is failed with
+         * {@code verification_expired} (its fee is refunded) and a new
+         * signup is started, charged and sent a new code. If the first call
          * stopped before the code was requested, the repeat call requests it
          * (201). Same scope, key and role rules as {@link #create(String)}.
          *
@@ -271,17 +280,16 @@ public class WhatsAppResource {
          *         409 {@code whatsapp_signup_in_progress} (a Facebook
          *         connection for the number is in flight), 409
          *         {@code whatsapp_already_enabled}, 402
-         *         {@code payment_method_required} or {@code payment_failed}
-         *         (not returned while connecting is free),
+         *         {@code payment_method_required} or {@code payment_failed},
          *         429 {@code whatsapp_signup_limit_reached}, and
          *         {@code whatsapp_verification_start_failed}: a 422 when
          *         WhatsApp refused to send the code (final) or a 503 when it
-         *         couldn't be reached; either way the signup failed. With
-         *         {@code businessAccountId} the request is
+         *         couldn't be reached; either way the signup failed and the fee
+         *         is refunded. With {@code businessAccountId} the request is
          *         not retried automatically (only a 429 rate limit is): a
          *         5xx, a 4xx or a network error is thrown on the first
          *         attempt, because each attempt after a failed one starts a new
-         *         signup; a Facebook connection keeps
+         *         signup that is charged again; a Facebook connection keeps
          *         the usual retries. A Facebook connection for a number that
          *         is verifying gets 409
          *         {@code whatsapp_verification_in_progress} with the signup's
@@ -342,7 +350,7 @@ public class WhatsAppResource {
          *         {@code whatsapp_verification_code_invalid} (wrong code;
          *         {@code getResponseBody()} carries {@code attemptsRemaining});
          *         409 {@code whatsapp_verification_failed} after 5 wrong
-         *         codes (the signup failed; thrown on
+         *         codes (the signup failed and the fee is refunded; thrown on
          *         the first attempt, never retried); 409
          *         {@code whatsapp_verification_busy} (another code for the
          *         number is being checked; try again); 503

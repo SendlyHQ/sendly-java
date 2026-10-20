@@ -129,7 +129,8 @@ still be delivered: check before sending it again. An error whose code ends in
 calls are never retried except on a 429 rate limit, so a 5xx, a 4xx or a
 network error from them is thrown on the first attempt: `whatsapp().signup().verify()` (every submission
 uses one of the 5 attempts), `whatsapp().signup().create()` with a
-`businessAccountId` (each attempt after a failed one starts a new signup) and `whatsapp().senders().uploadProfilePhoto()`. An
+`businessAccountId` (each attempt after a failed one starts a new signup and
+charges its fee again) and `whatsapp().senders().uploadProfilePhoto()`. An
 error page that is not JSON, such as a proxy's 502 or 524, is retried like any
 5xx; a 4xx page that is not JSON (a firewall's 403, a proxy's 413) is thrown at
 once. A 5xx that survives every attempt is thrown, so an exception from a 5xx
@@ -1018,10 +1019,10 @@ team workspace, connecting and sender edits need an owner or admin
 (`templates:write`). A missing role returns 403 `insufficient_permissions`.
 
 ```java
-// 1. Connect a number (free, no monthly fee). The connect URL must be
+// 1. Connect a number ($9.99 one-time, no monthly fee). The connect URL must be
 //    opened by a human: they log in with Facebook in a browser to link their
 //    WhatsApp Business Account. Calling again for a number with a signup in
-//    flight returns that signup.
+//    flight returns that signup without charging again.
 WhatsAppSignupSession signup = client.whatsapp().signup().create("+15125550188");
 System.out.println("Have your user open: " + signup.getConnectUrl());
 
@@ -1029,7 +1030,7 @@ System.out.println("Have your user open: " + signup.getConnectUrl());
 //    "registering" while WhatsApp activates the number. Activation usually
 //    takes a few minutes but can take hours. If it hasn't finished about 6
 //    hours after the session began, the session fails with
-//    registration_timeout.
+//    registration_timeout and the fee is refunded.
 WhatsAppSignup status = client.whatsapp().signup().get(signup.getId());
 System.out.println(status.getStatus());          // initiated | registering | verifying | active | failed
 System.out.println(status.getFailureReasons());  // why, when it failed
@@ -1127,7 +1128,7 @@ WhatsAppConversationalComponents components =
     client.whatsapp().senders().getConversationalComponents("+15125550188");
 
 // 8. Add another number to a connected WhatsApp Business account, with no
-//    Facebook step. Free, like a Facebook connection. WhatsApp
+//    Facebook step. Same $9.99 one-time fee, refunded if it fails. WhatsApp
 //    sends the number a code by SMS (or "voice"). Take the account id from an
 //    active sender: the list is newest first and a pending sender has none.
 //    A null businessAccountId starts a Facebook connection instead; a blank one is refused.
@@ -1255,8 +1256,11 @@ Refusals to plan for:
   unavailable for now, nothing was charged, and the body carries
   `retryAfter: 3600` with a `Retry-After: 3600` header. The client retries it
   like any 5xx before throwing it. No send returns it.
-- Connecting a number is free, and so is a new attempt after a failed one.
-- `whatsapp_signup_limit_reached` (429): 5 signups failed in the last
+- The connection fee: connecting a number costs a one-time $9.99 per number,
+  charged to your card when you start connecting it. If the connection fails,
+  the fee is refunded automatically. Once the number is connected it is not
+  refundable, and a later disconnect gets nothing back.
+- `whatsapp_signup_limit_reached` (429): 5 charged signups failed in the last
   24 hours. It is thrown at once; try again the next day.
 - `whatsapp_send_failed` on a send: a 422 means the carrier refused the message
   and it is final (cached under the idempotency key and replayed for 24
@@ -1294,14 +1298,14 @@ Refusals to plan for:
   `display_name_required`, 409 `whatsapp_signup_in_progress` or
   `whatsapp_already_enabled`, and `whatsapp_verification_start_failed` (422
   when WhatsApp refused to send the code, 503 when it could not be reached;
-  the signup failed). Neither this `create()` nor
+  the signup failed and the fee is refunded). Neither this `create()` nor
   `verify()` is retried automatically except on a 429 rate limit. A Facebook
   signup for a number that is verifying gets 409
   `whatsapp_verification_in_progress`.
 - `verify()`: 400 `invalid_verification_code` (not 6 digits), 422
   `whatsapp_verification_code_invalid` with `attemptsRemaining` in
   `getResponseBody()`, 409 `whatsapp_verification_failed` after 5 wrong codes
-  (the signup failed; not retried), 409
+  (the signup failed and the fee is refunded; not retried), 409
   `whatsapp_verification_busy` (try again), 503
   `whatsapp_verification_unavailable` (not counted as an attempt), 503
   `whatsapp_activation_pending` (the code was accepted; check back), 409
