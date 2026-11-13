@@ -14,6 +14,9 @@ import com.sendly.models.UpdateVoiceAgentRequest;
 import com.sendly.models.UpdateVoiceNumberRequest;
 import com.sendly.models.Voice;
 import com.sendly.models.VoiceAgent;
+import com.sendly.models.VoiceAgentConnection;
+import com.sendly.models.VoiceAgentConnectionInput;
+import com.sendly.models.VoiceAgentKind;
 import com.sendly.models.VoiceAgentListResponse;
 import com.sendly.models.VoiceAgentTools;
 import com.sendly.models.VoiceListResponse;
@@ -29,6 +32,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -56,6 +61,7 @@ class VoiceTest {
 
     private static final String AGENT_JSON =
         "{\"id\":\"" + AGENT_ID + "\",\"object\":\"voice_agent\",\"name\":\"Front desk\",\"enabled\":true," +
+        "\"kind\":\"sendly\",\"connection\":null,\"hasSigningSecret\":false," +
         "\"voice\":\"ashley\",\"voiceLabel\":\"Ashley (US, warm)\",\"language\":\"en-US\"," +
         "\"greeting\":\"Thanks for calling Acme, how can I help?\"," +
         "\"instructions\":\"Answer questions about opening hours.\"," +
@@ -586,6 +592,183 @@ class VoiceTest {
         assertEquals("", body.get("instructions").getAsString());
         assertEquals("", body.getAsJsonObject("tools").get("transferTo").getAsString());
         assertFalse(body.getAsJsonObject("tools").has("sendSms"));
+    }
+
+    @Test
+    void testAgentsGet_sendlyAgent_hasNoConnectionOrSecret() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_JSON));
+
+        VoiceAgent agent = client.voice().agents().get(AGENT_ID);
+
+        assertEquals(VoiceAgentKind.SENDLY, agent.getKind());
+        assertNull(agent.getConnection());
+        assertFalse(agent.hasSigningSecret());
+        assertNull(agent.getSigningSecret());
+    }
+
+    @Test
+    void testAgentsCreate_ownAgent_sendsKindAndConnection() throws Exception {
+        mockServer.enqueue(created(AGENT_JSON
+                .replace("\"kind\":\"sendly\",\"connection\":null,\"hasSigningSecret\":false",
+                        "\"kind\":\"custom_llm\",\"connection\":{\"baseUrl\":\"https://llm.example.com/v1\"," +
+                        "\"model\":\"acme-receptionist-1\",\"headerNames\":[\"X-Team\"],\"hasApiKey\":true}," +
+                        "\"hasSigningSecret\":true,\"signingSecret\":\"vsk_agent_once\"")));
+
+        Map<String, String> headers = new LinkedHashMap<>();
+        headers.put("X-Team", "front-desk");
+        VoiceAgent agent = client.voice().agents().create(CreateVoiceAgentRequest.builder()
+                .name("Own model")
+                .kind(VoiceAgentKind.CUSTOM_LLM)
+                .connection(VoiceAgentConnectionInput.builder()
+                        .baseUrl("https://llm.example.com/v1")
+                        .model("acme-receptionist-1")
+                        .apiKey("sk-example-123")
+                        .headers(headers)
+                        .build())
+                .build());
+
+        JsonObject body = bodyOf(mockServer.takeRequest());
+        assertEquals(3, body.size());
+        assertEquals("Own model", body.get("name").getAsString());
+        assertEquals("custom_llm", body.get("kind").getAsString());
+        JsonObject connection = body.getAsJsonObject("connection");
+        assertEquals(4, connection.size());
+        assertEquals("https://llm.example.com/v1", connection.get("baseUrl").getAsString());
+        assertEquals("acme-receptionist-1", connection.get("model").getAsString());
+        assertEquals("sk-example-123", connection.get("apiKey").getAsString());
+        assertEquals("front-desk", connection.getAsJsonObject("headers").get("X-Team").getAsString());
+        assertFalse(body.has("rotateSigningSecret"));
+
+        assertEquals(VoiceAgentKind.CUSTOM_LLM, agent.getKind());
+        assertTrue(agent.hasSigningSecret());
+        assertEquals("vsk_agent_once", agent.getSigningSecret());
+        VoiceAgentConnection saved = agent.getConnection();
+        assertNotNull(saved);
+        assertEquals("https://llm.example.com/v1", saved.getBaseUrl());
+        assertEquals("acme-receptionist-1", saved.getModel());
+        assertEquals(java.util.List.of("X-Team"), saved.getHeaderNames());
+        assertTrue(saved.hasApiKey());
+        assertNull(saved.getUri());
+        assertNull(saved.getHeaders());
+    }
+
+    @Test
+    void testAgentsUpdate_connection_omittedKeepsAndNullRemoves() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_JSON
+                .replace("\"kind\":\"sendly\",\"connection\":null,\"hasSigningSecret\":false",
+                        "\"kind\":\"sip\",\"connection\":{\"uri\":\"sip:+15555550100@sip.example.com\"," +
+                        "\"transport\":\"tls\",\"mediaEncryption\":\"require\",\"username\":\"frontdesk\"," +
+                        "\"hasPassword\":false,\"headers\":{}},\"hasSigningSecret\":true")));
+
+        VoiceAgent agent = client.voice().agents().update(AGENT_ID, UpdateVoiceAgentRequest.builder()
+                .connection(VoiceAgentConnectionInput.builder()
+                        .transport("tls")
+                        .mediaEncryption("require")
+                        .password(null)
+                        .headers(null)
+                        .build())
+                .build());
+
+        JsonObject body = bodyOf(mockServer.takeRequest());
+        assertEquals(1, body.size());
+        JsonObject connection = body.getAsJsonObject("connection");
+        assertEquals(4, connection.size());
+        assertEquals("tls", connection.get("transport").getAsString());
+        assertEquals("require", connection.get("mediaEncryption").getAsString());
+        assertTrue(connection.has("password"));
+        assertTrue(connection.get("password").isJsonNull());
+        assertTrue(connection.get("headers").isJsonNull());
+        assertFalse(connection.has("username"));
+        assertFalse(connection.has("uri"));
+
+        assertEquals(VoiceAgentKind.SIP, agent.getKind());
+        VoiceAgentConnection saved = agent.getConnection();
+        assertEquals("sip:+15555550100@sip.example.com", saved.getUri());
+        assertEquals("tls", saved.getTransport());
+        assertEquals("require", saved.getMediaEncryption());
+        assertEquals("frontdesk", saved.getUsername());
+        assertFalse(saved.hasPassword());
+        assertTrue(saved.getHeaders().isEmpty());
+        assertNull(agent.getSigningSecret());
+    }
+
+    @Test
+    void testAgentsUpdate_switchToWebsocket_returnsSecretOnce() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_JSON
+                .replace("\"kind\":\"sendly\",\"connection\":null,\"hasSigningSecret\":false",
+                        "\"kind\":\"websocket\",\"connection\":{\"url\":\"wss://agent.example.com/calls\"," +
+                        "\"audioFormat\":\"pcm16_24000\",\"hasAuthToken\":true,\"customParameters\":{\"tenant\":\"acme\"}}," +
+                        "\"hasSigningSecret\":true,\"signingSecret\":\"vsk_switched\"")));
+
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("tenant", "acme");
+        VoiceAgent agent = client.voice().agents().update(AGENT_ID, UpdateVoiceAgentRequest.builder()
+                .kind(VoiceAgentKind.WEBSOCKET)
+                .connection(VoiceAgentConnectionInput.builder()
+                        .url("wss://agent.example.com/calls")
+                        .audioFormat("pcm16_24000")
+                        .authToken("token-123")
+                        .customParameters(params)
+                        .build())
+                .build());
+
+        JsonObject body = bodyOf(mockServer.takeRequest());
+        assertEquals(2, body.size());
+        assertEquals("websocket", body.get("kind").getAsString());
+        JsonObject connection = body.getAsJsonObject("connection");
+        assertEquals("wss://agent.example.com/calls", connection.get("url").getAsString());
+        assertEquals("pcm16_24000", connection.get("audioFormat").getAsString());
+        assertEquals("token-123", connection.get("authToken").getAsString());
+        assertEquals("acme", connection.getAsJsonObject("customParameters").get("tenant").getAsString());
+
+        assertEquals("vsk_switched", agent.getSigningSecret());
+        VoiceAgentConnection saved = agent.getConnection();
+        assertEquals("wss://agent.example.com/calls", saved.getUrl());
+        assertEquals("pcm16_24000", saved.getAudioFormat());
+        assertTrue(saved.hasAuthToken());
+        assertEquals("acme", saved.getCustomParameters().get("tenant"));
+    }
+
+    @Test
+    void testAgentsUpdate_rotateSigningSecret_onlySentAsTrue() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_JSON
+                .replace("\"kind\":\"sendly\",\"connection\":null,\"hasSigningSecret\":false",
+                        "\"kind\":\"sip\",\"connection\":null,\"hasSigningSecret\":true,\"signingSecret\":\"vsk_rotated\"")));
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_JSON));
+
+        VoiceAgent agent = client.voice().agents().update(AGENT_ID, UpdateVoiceAgentRequest.builder()
+                .rotateSigningSecret(true)
+                .build());
+        client.voice().agents().update(AGENT_ID, UpdateVoiceAgentRequest.builder()
+                .rotateSigningSecret(false)
+                .build());
+
+        assertEquals("{\"rotateSigningSecret\":true}", mockServer.takeRequest().getBody().readUtf8());
+        assertEquals("{}", mockServer.takeRequest().getBody().readUtf8());
+        assertEquals("vsk_rotated", agent.getSigningSecret());
+    }
+
+    @Test
+    void testAgentsCreate_403ByoAgentsNotEnabled_carriesCode() {
+        mockServer.enqueue(apiError(403, "byo_agents_not_enabled", "Bring your own agent is not switched on for this workspace."));
+
+        SendlyException e = assertThrows(SendlyException.class, () ->
+                client.voice().agents().create(CreateVoiceAgentRequest.builder()
+                        .name("Own SIP")
+                        .kind(VoiceAgentKind.SIP)
+                        .connection(VoiceAgentConnectionInput.builder().uri("sip:+15555550100@sip.example.com").build())
+                        .build()));
+
+        assertEquals(403, e.getStatusCode());
+        assertEquals(CallErrorCode.BYO_AGENTS_NOT_ENABLED, e.getApiErrorCode());
+    }
+
+    @Test
+    void testAgentKindConstants_matchTheWire() {
+        assertEquals("sendly", VoiceAgentKind.SENDLY);
+        assertEquals("custom_llm", VoiceAgentKind.CUSTOM_LLM);
+        assertEquals("sip", VoiceAgentKind.SIP);
+        assertEquals("websocket", VoiceAgentKind.WEBSOCKET);
     }
 
     @Test

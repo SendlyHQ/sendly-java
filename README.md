@@ -1595,6 +1595,11 @@ if (finished.getTranscript() != null) {
 // End a call early. Ringing -> cancelled, active -> completed; an ended call is returned unchanged.
 client.calls().hangup(call.getId());
 
+// Hand the caller on an incoming call to a person. transfer(id) alone uses the
+// agent's transfer number (tools.transferTo).
+Call transferring = client.calls().transfer(call.getId(), "+15125550199");
+System.out.println(transferring.getTransfer().getStatus()); // "pending", then "completed" or "failed"
+
 // Fetch the recording. The URL is signed and works for five minutes.
 CallRecording recording = client.calls().recording(call.getId());
 if (recording.isReady()) {
@@ -1630,10 +1635,31 @@ try {
 ```
 
 `CallStatus`, `CallDirection`, `CallKind`, `CallChannel`, `CallHandledBy`,
-`CallBilling` and `CallRecordingStatus` hold the string values the call object
-uses. `getChannel()` is `phone`, `whatsapp` or `browser`, and the `call.*`
-webhook objects carry the same `channel` key; compare against the constants,
-since a value added later is returned as sent.
+`CallBilling`, `CallRecordingStatus`, `CallTransferStatus`,
+`CallTransferFailureReason` and `VoiceAgentKind` hold the string values the
+call object uses. `getChannel()` is `phone`, `whatsapp` or `browser`, and the
+`call.*` webhook objects carry the same `channel` key; compare against the
+constants, since a value added later is returned as sent.
+
+`getAgentKind()` is the kind of agent that answered (`sendly`, `custom_llm`,
+`sip` or `websocket`; `null` when no agent did), and
+`ListCallsOptions.Builder.agentKind()` filters by it. `isAgentFallback()` is
+true when your own agent could not be reached, so Sendly said a short line and
+transferred the caller or took a message. `getTransfer()` is `null` until the
+call is transferred, then a `CallTransfer` with `getTo()`, `getStatus()`
+(`pending`, `completed` or `failed`) and `getFailureReason()` (`busy`,
+`no_answer`, `declined`, `unavailable` or `unknown`, set only when it failed;
+the caller stays on the call). Once the caller is handed over the call ends
+with `hangupClass` `transferred`; `agent_remote_hangup` means your own agent
+ended the call and `agent_byo_failed` that it could not be reached.
+
+`transfer()` works on incoming phone calls, whatever kind of agent is on the
+call. A number other than the agent's transfer number needs calling out
+switched on for the workspace (403 `outbound_not_enabled`); other refusals
+are 400 `transfer_to_required` (no number given and the agent has none), 402
+`insufficient_credits` and 409 `call_not_active`, `call_not_transferable` or
+`transfer_in_progress`. A `sip` or `websocket` agent answers incoming calls
+only, so `create()` with one is 409 `agent_kind_unsupported`.
 
 ### Configure voice
 
@@ -1697,6 +1723,26 @@ agent = client.voice().agents().update(agent.getId(), UpdateVoiceAgentRequest.bu
     .greeting("Thanks for calling Acme. How can I help today?")
     .build());
 
+// Or answer with your own agent (needs the workspace's bring-your-own-agent
+// feature): your chat completions endpoint, a SIP address or a wss:// server
+VoiceAgent own = client.voice().agents().create(CreateVoiceAgentRequest.builder()
+    .name("Own model")
+    .kind(VoiceAgentKind.CUSTOM_LLM)
+    .connection(VoiceAgentConnectionInput.builder()
+        .baseUrl("https://llm.example.com/v1")
+        .model("acme-receptionist-1")
+        .apiKey("sk-example")
+        .build())
+    .build());
+String secret = own.getSigningSecret(); // shown once: save it to check X-Sendly-Signature
+
+// Connection fields left unset keep their values; null removes a secret.
+// rotateSigningSecret(true) returns a new secret once and retires the old one.
+own = client.voice().agents().update(own.getId(), UpdateVoiceAgentRequest.builder()
+    .connection(VoiceAgentConnectionInput.builder().apiKey(null).build())
+    .rotateSigningSecret(true)
+    .build());
+
 // Ring the team instead, then delete the agent
 client.voice().numbers().update("+15125550147", UpdateVoiceNumberRequest.builder()
     .voiceMode(VoiceMode.RING_DASHBOARD)
@@ -1711,14 +1757,21 @@ switches voice on, so it can fail the way switching on does (503
 it off. `voiceEnabled(false)` wins over any mode, and `VoiceMode.NONE` with
 `voiceEnabled(true)` becomes `ring_dashboard`. An empty
 `agentId` clears the stored agent, and an empty `transferTo` clears that tool.
-Agents cannot transfer calls yet: while `transferTo` is set, a caller who asks
-for a person is told the message will be passed on, and the agent takes their
-name and number. A workspace can hold up to 20 agents. Every write also takes
-an `IdempotentRequestOptions` overload.
+`transferTo` is the number a caller who asks for a person is transferred to,
+and where `calls().transfer(id)` sends the caller. A workspace can hold up to
+20 agents. Every write also takes an `IdempotentRequestOptions` overload.
+
+`VoiceAgent.getKind()` says who answers, and `getConnection()` how Sendly
+reaches your own agent (`null` for a `sendly` agent). Secrets are never
+returned: `hasApiKey()`, `hasPassword()` and `hasAuthToken()` say whether one
+is saved. `getSigningSecret()` is set only on the response that made it
+(creating your own agent, switching to one, or `rotateSigningSecret(true)`).
+Switching the kind to `sendly` removes the connection and the signing secret.
 
 Refusals carry `getApiErrorCode()` as usual: 400 `ValidationException`
 (`invalid_request`, `invalid_voice_mode`, `agent_required`, `invalid_address`,
-`e911_not_applicable`), 404 `NotFoundException` (`number_not_found`,
+`e911_not_applicable`), 403 `SendlyException` (`byo_agents_not_enabled`, your
+own agent while the feature is off), 404 `NotFoundException` (`number_not_found`,
 `agent_not_found`), 409 `SendlyException` (`agent_disabled`, `agent_limit`,
 `agent_in_use`), 422 `ValidationException` (`invalid_address`, the address
 couldn't be validated) and 503 `SendlyException` (`voice_attach_failed`,

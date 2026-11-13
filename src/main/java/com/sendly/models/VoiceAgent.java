@@ -6,7 +6,9 @@ import com.google.gson.JsonObject;
  * An AI agent that answers and places phone calls, from
  * {@code voice().agents()}.
  * <p>
- * Timestamps are ISO 8601 strings.
+ * Timestamps are ISO 8601 strings. {@link #getKind()} says who answers:
+ * Sendly ({@code sendly}), or your own agent ({@code custom_llm}, {@code sip}
+ * or {@code websocket}) reached over {@link #getConnection()}.
  * </p>
  */
 public class VoiceAgent {
@@ -14,6 +16,10 @@ public class VoiceAgent {
     private final String object;
     private final String name;
     private final boolean enabled;
+    private final String kind;
+    private final VoiceAgentConnection connection;
+    private final boolean hasSigningSecret;
+    private final String signingSecret;
     private final String voice;
     private final String voiceLabel;
     private final String language;
@@ -34,6 +40,11 @@ public class VoiceAgent {
         this.object = getStringOrNull(json, "object");
         this.name = getStringOrNull(json, "name");
         this.enabled = getBoolean(json, "enabled");
+        this.kind = getStringOrNull(json, "kind");
+        this.connection = json.has("connection") && json.get("connection").isJsonObject()
+                ? new VoiceAgentConnection(json.getAsJsonObject("connection")) : null;
+        this.hasSigningSecret = getBoolean(json, "hasSigningSecret");
+        this.signingSecret = getStringOrNull(json, "signingSecret");
         this.voice = getStringOrNull(json, "voice");
         this.voiceLabel = getStringOrNull(json, "voiceLabel");
         this.language = getStringOrNull(json, "language");
@@ -78,6 +89,40 @@ public class VoiceAgent {
     /** False when the agent is switched off; a switched-off agent can't be pointed at a number or put on a call. */
     public boolean isEnabled() {
         return enabled;
+    }
+
+    /**
+     * Who answers: {@code "sendly"}, {@code "custom_llm"}, {@code "sip"} or
+     * {@code "websocket"}; see {@link VoiceAgentKind}. A kind added later is
+     * returned as sent.
+     */
+    public String getKind() {
+        return kind;
+    }
+
+    /**
+     * How Sendly reaches your own agent, or {@code null} for a
+     * {@code sendly} agent. Secrets are never returned.
+     */
+    public VoiceAgentConnection getConnection() {
+        return connection;
+    }
+
+    /** True when the agent has a signing secret. Your own agents do: Sendly signs every request to them with it. */
+    public boolean hasSigningSecret() {
+        return hasSigningSecret;
+    }
+
+    /**
+     * The agent's signing secret, returned only when it was just made: on
+     * creating your own agent, on switching an agent to one of your own
+     * kinds, and on {@code rotateSigningSecret}. {@code null} on every other
+     * response. Save it now; it is never shown again. Sendly signs every
+     * request to your agent with it in {@code X-Sendly-Signature}
+     * ({@code t=<unix>,v1=<hex HMAC-SHA256>}).
+     */
+    public String getSigningSecret() {
+        return signingSecret;
     }
 
     /** Voice id, one of {@code voice().voices().list()}. */
@@ -141,6 +186,7 @@ public class VoiceAgent {
                 "id='" + id + '\'' +
                 ", name='" + name + '\'' +
                 ", enabled=" + enabled +
+                ", kind='" + kind + '\'' +
                 ", voice='" + voice + '\'' +
                 '}';
     }

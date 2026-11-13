@@ -39,6 +39,9 @@ public class Call {
     private final int creditsCharged;
     private final String billing;
     private final String hangupClass;
+    private final String agentKind;
+    private final boolean agentFallback;
+    private final CallTransfer transfer;
     private final String recordingStatus;
     private final Map<String, String> metadata;
     private final List<CallTranscriptLine> transcript;
@@ -66,6 +69,11 @@ public class Call {
         this.creditsCharged = getIntOrZero(json, "creditsCharged");
         this.billing = getStringOrNull(json, "billing");
         this.hangupClass = getStringOrNull(json, "hangupClass");
+        this.agentKind = getStringOrNull(json, "agentKind");
+        this.agentFallback = json.has("agentFallback") && !json.get("agentFallback").isJsonNull()
+                && json.get("agentFallback").getAsBoolean();
+        this.transfer = json.has("transfer") && json.get("transfer").isJsonObject()
+                ? new CallTransfer(json.getAsJsonObject("transfer")) : null;
         this.recordingStatus = getStringOrNull(json, "recordingStatus");
 
         Map<String, String> meta = new LinkedHashMap<>();
@@ -200,6 +208,32 @@ public class Call {
         return hangupClass;
     }
 
+    /**
+     * Which kind of agent answered: {@code "sendly"}, or one of your own
+     * ({@code "custom_llm"}, {@code "sip"}, {@code "websocket"}); see
+     * {@link VoiceAgentKind}. {@code null} when no agent handled the call. A
+     * kind added later is returned as sent.
+     */
+    public String getAgentKind() {
+        return agentKind;
+    }
+
+    /**
+     * True when your own agent could not be reached (or dropped), so Sendly
+     * said a short line and transferred the caller or took a message.
+     */
+    public boolean isAgentFallback() {
+        return agentFallback;
+    }
+
+    /**
+     * The latest transfer on the call, or {@code null} when it was never
+     * transferred. A failed transfer leaves the caller on the call.
+     */
+    public CallTransfer getTransfer() {
+        return transfer;
+    }
+
     /** {@code null}, {@code "recording"}, {@code "ready"} or {@code "failed"}; see {@link CallRecordingStatus}. */
     public String getRecordingStatus() {
         return recordingStatus;
@@ -231,6 +265,7 @@ public class Call {
                 ", durationSecs=" + durationSecs +
                 ", creditsCharged=" + creditsCharged +
                 ", hangupClass='" + hangupClass + '\'' +
+                ", agentKind='" + agentKind + '\'' +
                 '}';
     }
 }

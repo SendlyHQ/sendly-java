@@ -15,11 +15,24 @@ import com.google.gson.JsonObject;
  *     .instructions("Answer questions about opening hours and take a message for anything else.")
  *     .tools(VoiceAgentTools.builder().sendSms(true).build())
  *     .build();
+ *
+ * // Your own agent, reached at your chat completions endpoint
+ * CreateVoiceAgentRequest own = CreateVoiceAgentRequest.builder()
+ *     .name("Own model")
+ *     .kind(VoiceAgentKind.CUSTOM_LLM)
+ *     .connection(VoiceAgentConnectionInput.builder()
+ *         .baseUrl("https://llm.example.com/v1")
+ *         .model("acme-receptionist-1")
+ *         .apiKey("sk-example")
+ *         .build())
+ *     .build();
  * }</pre>
  */
 public class CreateVoiceAgentRequest {
     private final String name;
     private final Boolean enabled;
+    private final String kind;
+    private final VoiceAgentConnectionInput connection;
     private final String voice;
     private final String language;
     private final String greeting;
@@ -29,6 +42,8 @@ public class CreateVoiceAgentRequest {
     private CreateVoiceAgentRequest(Builder builder) {
         this.name = builder.name;
         this.enabled = builder.enabled;
+        this.kind = builder.kind;
+        this.connection = builder.connection;
         this.voice = builder.voice;
         this.language = builder.language;
         this.greeting = builder.greeting;
@@ -38,6 +53,8 @@ public class CreateVoiceAgentRequest {
 
     public String getName() { return name; }
     public Boolean getEnabled() { return enabled; }
+    public String getKind() { return kind; }
+    public VoiceAgentConnectionInput getConnection() { return connection; }
     public String getVoice() { return voice; }
     public String getLanguage() { return language; }
     public String getGreeting() { return greeting; }
@@ -49,6 +66,8 @@ public class CreateVoiceAgentRequest {
         JsonObject o = new JsonObject();
         if (name != null) o.addProperty("name", name);
         if (enabled != null) o.addProperty("enabled", enabled);
+        if (kind != null) o.addProperty("kind", kind);
+        if (connection != null) o.add("connection", connection.toJson());
         if (voice != null) o.addProperty("voice", voice);
         if (language != null) o.addProperty("language", language);
         if (greeting != null) o.addProperty("greeting", greeting);
@@ -64,6 +83,8 @@ public class CreateVoiceAgentRequest {
     public static class Builder {
         private String name;
         private Boolean enabled;
+        private String kind;
+        private VoiceAgentConnectionInput connection;
         private String voice;
         private String language;
         private String greeting;
@@ -79,6 +100,27 @@ public class CreateVoiceAgentRequest {
         /** Whether the agent is switched on. Defaults to true. */
         public Builder enabled(boolean enabled) {
             this.enabled = enabled;
+            return this;
+        }
+
+        /**
+         * Who answers: {@code "sendly"} (the default), or your own agent,
+         * {@code "custom_llm"}, {@code "sip"} or {@code "websocket"}; see
+         * {@link VoiceAgentKind}. Your own agents need {@link #connection}
+         * and the workspace's bring-your-own-agent feature (403
+         * {@code byo_agents_not_enabled} otherwise; support switches it on).
+         */
+        public Builder kind(String kind) {
+            this.kind = kind;
+            return this;
+        }
+
+        /**
+         * How Sendly reaches your own agent, matching {@link #kind}. Required
+         * for your own agents.
+         */
+        public Builder connection(VoiceAgentConnectionInput connection) {
+            this.connection = connection;
             return this;
         }
 

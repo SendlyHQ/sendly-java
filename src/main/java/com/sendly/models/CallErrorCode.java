@@ -25,6 +25,17 @@ public final class CallErrorCode {
     public static final String AGENT_DISABLED = "agent_disabled";
     /** 409: the agent still answers one or more numbers; point them elsewhere before deleting it. */
     public static final String AGENT_IN_USE = "agent_in_use";
+    /**
+     * 409: the agent's kind is {@code sip} or {@code websocket}, which answer
+     * incoming calls only; a {@code custom_llm} agent can place calls.
+     */
+    public static final String AGENT_KIND_UNSUPPORTED = "agent_kind_unsupported";
+    /**
+     * 403: the agent's kind is one of your own (or a connection or
+     * {@code rotateSigningSecret} was sent) and the workspace's
+     * bring-your-own-agent feature is off; support switches it on.
+     */
+    public static final String BYO_AGENTS_NOT_ENABLED = "byo_agents_not_enabled";
     /** 409: the workspace already has the most agents it can hold (20). */
     public static final String AGENT_LIMIT = "agent_limit";
     /** 400: {@code voiceMode} is not {@code none}, {@code ring_dashboard} or {@code agent}. */
@@ -63,7 +74,7 @@ public final class CallErrorCode {
     public static final String NUMBER_NOT_FOUND = "number_not_found";
     /** 428: register an emergency address for the number before placing calls. */
     public static final String E911_REQUIRED = "e911_required";
-    /** 402: the balance does not cover one minute at the agent rate. */
+    /** 402: the balance does not cover one minute at the agent rate, or (on a transfer) the workspace has no credits left. */
     public static final String INSUFFICIENT_CREDITS = "insufficient_credits";
     /** 409: every line in the workspace is in use; try again in a moment. */
     public static final String LINES_BUSY = "lines_busy";
@@ -81,6 +92,16 @@ public final class CallErrorCode {
     public static final String TOO_MANY_CONCURRENT_VERIFICATIONS = "too_many_concurrent_verifications";
     /** 404: no call with that id is in this workspace. */
     public static final String CALL_NOT_FOUND = "call_not_found";
+    /** 409: the call is not in progress, so it can't be transferred. */
+    public static final String CALL_NOT_ACTIVE = "call_not_active";
+    /** 409: only incoming phone calls can be transferred. */
+    public static final String CALL_NOT_TRANSFERABLE = "call_not_transferable";
+    /** 409: a transfer is already under way, or the call has had 3 transfer attempts. */
+    public static final String TRANSFER_IN_PROGRESS = "transfer_in_progress";
+    /** 400: no transfer number was given and the agent has none ({@code tools.transferTo}). */
+    public static final String TRANSFER_TO_REQUIRED = "transfer_to_required";
+    /** 403: the transfer number is not the agent's, and calling out is not switched on for the workspace. */
+    public static final String OUTBOUND_NOT_ENABLED = "outbound_not_enabled";
     /** 403: phone calls and voice changes need a live API key. */
     public static final String LIVE_KEY_REQUIRED = "live_key_required";
     /**

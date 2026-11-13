@@ -17,11 +17,15 @@ import com.sendly.models.CallRecording;
 import com.sendly.models.CallRecordingStatus;
 import com.sendly.models.CallStatus;
 import com.sendly.models.CallTranscriptLine;
+import com.sendly.models.CallTransfer;
+import com.sendly.models.CallTransferFailureReason;
+import com.sendly.models.CallTransferStatus;
 import com.sendly.models.CreateCallRequest;
 import com.sendly.models.IdempotentRequestOptions;
 import com.sendly.models.ListCallsOptions;
 import com.sendly.models.OwnedNumber;
 import com.sendly.models.OwnedNumbersResponse;
+import com.sendly.models.VoiceAgentKind;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
 import okhttp3.mockwebserver.RecordedRequest;
@@ -35,7 +39,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests for the Calls resource: create, list, get, hangup and recording.
+ * Tests for the Calls resource: create, list, get, hangup, transfer and recording.
  */
 class CallsTest {
     private static final String CALL_ID = "6f1c2d3e-4a5b-4c6d-8e9f-0a1b2c3d4e5f";
@@ -334,6 +338,7 @@ class CallsTest {
                 .direction(CallDirection.OUTBOUND)
                 .kind(CallKind.PSTN)
                 .agentId(AGENT_ID)
+                .agentKind(VoiceAgentKind.CUSTOM_LLM)
                 .to("+15555550123")
                 .from("+15555550188")
                 .build());
@@ -351,8 +356,20 @@ class CallsTest {
         assertTrue(path.contains("direction=outbound"));
         assertTrue(path.contains("kind=pstn"));
         assertTrue(path.contains("agentId=" + AGENT_ID));
+        assertTrue(path.contains("agentKind=custom_llm"));
         assertTrue(path.contains("to=%2B15555550123"));
         assertTrue(path.contains("from=%2B15555550188"));
+    }
+
+    @Test
+    void testList_agentKindOnly_isTheOnlyQueryParam() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"data\":[],\"pagination\":{\"total\":0,\"limit\":50,\"offset\":0,\"hasMore\":false}}"
+        ));
+
+        client.calls().list(ListCallsOptions.builder().agentKind(VoiceAgentKind.WEBSOCKET).build());
+
+        assertTrue(mockServer.takeRequest().getPath().endsWith("/calls?agentKind=websocket"));
     }
 
     @Test
@@ -434,6 +451,46 @@ class CallsTest {
         assertEquals(CallChannel.BROWSER, client.calls().get("call_dash_1").getChannel());
         assertEquals("satellite", client.calls().get("call_dash_1").getChannel());
         assertNull(client.calls().get("call_dash_1").getChannel());
+    }
+
+    @Test
+    void testGet_agentKindFallbackAndFailedTransfer_parse() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(COMPLETED_CALL_JSON.replace("\"recordingStatus\":",
+                "\"agentKind\":\"sip\",\"agentFallback\":true," +
+                "\"transfer\":{\"to\":\"+15555550190\",\"status\":\"failed\",\"failureReason\":\"no_answer\"}," +
+                "\"recordingStatus\":")));
+        mockServer.enqueue(TestHelpers.mockSuccess(COMPLETED_CALL_JSON.replace("\"recordingStatus\":",
+                "\"agentKind\":\"hologram\",\"agentFallback\":false," +
+                "\"transfer\":{\"to\":\"+15555550190\",\"status\":\"parked\",\"failureReason\":null}," +
+                "\"recordingStatus\":")));
+        mockServer.enqueue(TestHelpers.mockSuccess(DASHBOARD_CALL_JSON.replace("\"recordingStatus\":",
+                "\"agentKind\":null,\"agentFallback\":false,\"transfer\":null,\"recordingStatus\":")));
+        mockServer.enqueue(TestHelpers.mockSuccess(DASHBOARD_CALL_JSON));
+
+        Call call = client.calls().get(CALL_ID);
+        assertEquals(VoiceAgentKind.SIP, call.getAgentKind());
+        assertTrue(call.isAgentFallback());
+        CallTransfer transfer = call.getTransfer();
+        assertNotNull(transfer);
+        assertEquals("+15555550190", transfer.getTo());
+        assertEquals(CallTransferStatus.FAILED, transfer.getStatus());
+        assertEquals(CallTransferFailureReason.NO_ANSWER, transfer.getFailureReason());
+
+        call = client.calls().get(CALL_ID);
+        assertEquals("hologram", call.getAgentKind());
+        assertFalse(call.isAgentFallback());
+        assertEquals("parked", call.getTransfer().getStatus());
+        assertNull(call.getTransfer().getFailureReason());
+
+        call = client.calls().get("call_dash_1");
+        assertNull(call.getAgentKind());
+        assertFalse(call.isAgentFallback());
+        assertNull(call.getTransfer());
+
+        call = client.calls().get("call_dash_1");
+        assertNull(call.getAgentKind());
+        assertFalse(call.isAgentFallback());
+        assertNull(call.getTransfer());
     }
 
     @Test
@@ -528,6 +585,135 @@ class CallsTest {
         NotFoundException e = assertThrows(NotFoundException.class, () -> client.calls().hangup("call_other_ws"));
 
         assertEquals(CallErrorCode.CALL_NOT_FOUND, e.getApiErrorCode());
+    }
+
+    // ==================== transfer() Tests ====================
+
+    private static final String TRANSFERRING_CALL_JSON = COMPLETED_CALL_JSON
+            .replace("\"direction\":\"outbound\"", "\"direction\":\"inbound\"")
+            .replace("\"status\":\"completed\"", "\"status\":\"active\"")
+            .replace("\"recordingStatus\":",
+                    "\"agentKind\":\"websocket\",\"agentFallback\":false," +
+                    "\"transfer\":{\"to\":\"+15555550190\",\"status\":\"pending\",\"failureReason\":null}," +
+                    "\"recordingStatus\":");
+
+    @Test
+    void testTransfer_withTo_postsNumber() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(TRANSFERRING_CALL_JSON).setResponseCode(202));
+
+        Call call = client.calls().transfer(CALL_ID, "+15555550190");
+
+        assertEquals(CallStatus.ACTIVE, call.getStatus());
+        assertEquals(VoiceAgentKind.WEBSOCKET, call.getAgentKind());
+        assertEquals(CallTransferStatus.PENDING, call.getTransfer().getStatus());
+        assertEquals("+15555550190", call.getTransfer().getTo());
+        assertNull(call.getTransfer().getFailureReason());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("POST", request.getMethod());
+        assertTrue(request.getPath().endsWith("/calls/" + CALL_ID + "/transfer"));
+        assertNotNull(request.getHeader("Idempotency-Key"));
+        JsonObject body = bodyOf(request);
+        assertEquals(1, body.size());
+        assertEquals("+15555550190", body.get("to").getAsString());
+    }
+
+    @Test
+    void testTransfer_withoutTo_sendsEmptyObject() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(TRANSFERRING_CALL_JSON).setResponseCode(202));
+        mockServer.enqueue(TestHelpers.mockSuccess(TRANSFERRING_CALL_JSON).setResponseCode(202));
+
+        client.calls().transfer(CALL_ID);
+        client.calls().transfer(CALL_ID, null);
+
+        assertEquals("{}", mockServer.takeRequest().getBody().readUtf8());
+        assertEquals("{}", mockServer.takeRequest().getBody().readUtf8());
+    }
+
+    @Test
+    void testTransfer_callerIdempotencyKey_isSent() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(TRANSFERRING_CALL_JSON).setResponseCode(202));
+
+        client.calls().transfer(CALL_ID, null, new IdempotentRequestOptions("transfer-1"));
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("transfer-1", request.getHeader("Idempotency-Key"));
+        assertEquals(0, bodyOf(request).size());
+    }
+
+    @Test
+    void testTransfer_encodesPathId() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(TRANSFERRING_CALL_JSON).setResponseCode(202));
+
+        client.calls().transfer("../hangup", "+15555550190");
+
+        assertTrue(mockServer.takeRequest().getPath().endsWith("/calls/..%2Fhangup/transfer"));
+    }
+
+    @Test
+    void testTransfer_missingId_throwsValidationException() {
+        assertThrows(ValidationException.class, () -> client.calls().transfer(null));
+        assertThrows(ValidationException.class, () -> client.calls().transfer(" ", "+15555550190"));
+        assertEquals(0, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testTransfer_400TransferToRequired_throwsValidationException() {
+        mockServer.enqueue(apiError(400, "transfer_to_required", "Pass to: this agent has no transfer number."));
+
+        ValidationException e = assertThrows(ValidationException.class, () -> client.calls().transfer(CALL_ID));
+
+        assertEquals(CallErrorCode.TRANSFER_TO_REQUIRED, e.getApiErrorCode());
+    }
+
+    @Test
+    void testTransfer_402InsufficientCredits_mapsCode() {
+        mockServer.enqueue(new MockResponse()
+                .setResponseCode(402)
+                .setBody("{\"error\":\"insufficient_credits\",\"message\":\"Transfers need credits on the workspace. Current balance: 0.\"," +
+                        "\"creditsNeeded\":1,\"currentBalance\":0}")
+                .addHeader("Content-Type", "application/json"));
+
+        InsufficientCreditsException e = assertThrows(InsufficientCreditsException.class, () ->
+                client.calls().transfer(CALL_ID));
+
+        assertEquals(CallErrorCode.INSUFFICIENT_CREDITS, e.getApiErrorCode());
+    }
+
+    @Test
+    void testTransfer_409TransferInProgress_carriesCode() {
+        mockServer.enqueue(apiError(409, "transfer_in_progress", "A transfer is already under way."));
+
+        SendlyException e = assertThrows(SendlyException.class, () -> client.calls().transfer(CALL_ID, "+15555550190"));
+
+        assertEquals(409, e.getStatusCode());
+        assertEquals(CallErrorCode.TRANSFER_IN_PROGRESS, e.getApiErrorCode());
+        assertEquals(1, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testTransfer_403OutboundNotEnabled_carriesCode() {
+        mockServer.enqueue(apiError(403, "outbound_not_enabled", "Calling out is not switched on for this workspace."));
+
+        SendlyException e = assertThrows(SendlyException.class, () -> client.calls().transfer(CALL_ID, "+15555550191"));
+
+        assertEquals(403, e.getStatusCode());
+        assertEquals(CallErrorCode.OUTBOUND_NOT_ENABLED, e.getApiErrorCode());
+    }
+
+    @Test
+    void testTransferConstants_matchTheWire() {
+        assertEquals("pending", CallTransferStatus.PENDING);
+        assertEquals("completed", CallTransferStatus.COMPLETED);
+        assertEquals("failed", CallTransferStatus.FAILED);
+        assertEquals("busy", CallTransferFailureReason.BUSY);
+        assertEquals("no_answer", CallTransferFailureReason.NO_ANSWER);
+        assertEquals("declined", CallTransferFailureReason.DECLINED);
+        assertEquals("unavailable", CallTransferFailureReason.UNAVAILABLE);
+        assertEquals("unknown", CallTransferFailureReason.UNKNOWN);
+        assertEquals("agent_kind_unsupported", CallErrorCode.AGENT_KIND_UNSUPPORTED);
+        assertEquals("call_not_active", CallErrorCode.CALL_NOT_ACTIVE);
+        assertEquals("call_not_transferable", CallErrorCode.CALL_NOT_TRANSFERABLE);
     }
 
     // ==================== recording() Tests ====================

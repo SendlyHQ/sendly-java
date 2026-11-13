@@ -23,6 +23,7 @@ public class ListCallsOptions {
     private final String direction;
     private final String kind;
     private final String agentId;
+    private final String agentKind;
     private final String to;
     private final String from;
 
@@ -33,6 +34,7 @@ public class ListCallsOptions {
         this.direction = builder.direction;
         this.kind = builder.kind;
         this.agentId = builder.agentId;
+        this.agentKind = builder.agentKind;
         this.to = builder.to;
         this.from = builder.from;
     }
@@ -48,6 +50,7 @@ public class ListCallsOptions {
         if (direction != null) params.put("direction", direction);
         if (kind != null) params.put("kind", kind);
         if (agentId != null) params.put("agentId", agentId);
+        if (agentKind != null) params.put("agentKind", agentKind);
         if (to != null) params.put("to", to);
         if (from != null) params.put("from", from);
         return params;
@@ -64,6 +67,7 @@ public class ListCallsOptions {
         private String direction;
         private String kind;
         private String agentId;
+        private String agentKind;
         private String to;
         private String from;
 
@@ -100,6 +104,16 @@ public class ListCallsOptions {
         /** Only calls handled by this agent. */
         public Builder agentId(String agentId) {
             this.agentId = agentId;
+            return this;
+        }
+
+        /**
+         * Only calls answered by this kind of agent; see
+         * {@link VoiceAgentKind}. Calls from before agent kinds existed count
+         * as {@code "sendly"}.
+         */
+        public Builder agentKind(String agentKind) {
+            this.agentKind = agentKind;
             return this;
         }
 

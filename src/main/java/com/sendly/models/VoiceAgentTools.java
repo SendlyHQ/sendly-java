@@ -42,10 +42,9 @@ public class VoiceAgentTools {
     }
 
     /**
-     * A number in E.164 for callers who need a person, or {@code null}.
-     * Agents cannot transfer calls yet and never dial or read out this number:
-     * while it is set, a caller who asks for a person is told the message will
-     * be passed on, and the agent takes their name and number.
+     * The number in E.164 a caller who asks for a person is transferred to,
+     * or {@code null} when the agent cannot transfer. Also where
+     * {@code calls().transfer(id)} sends the caller when no number is given.
      */
     public String getTransferTo() {
         return transferTo;

@@ -271,12 +271,22 @@ public class VoiceResource {
          * idempotency key is generated automatically and reused across the
          * SDK's own retries.
          * </p>
+         * <p>
+         * With a {@code kind} of {@code custom_llm}, {@code sip} or
+         * {@code websocket} and a matching connection, the agent is your own:
+         * Sendly reaches it over the connection and signs every request to it
+         * with the signing secret that {@code getSigningSecret()} returns this
+         * once. Save it now; it is never shown again.
+         * </p>
          *
-         * @param request The agent's name, voice, greeting, instructions and tools
-         * @return The new agent
+         * @param request The agent's name, kind, connection, voice, greeting, instructions and tools
+         * @return The new agent, with its signing secret when it is one of your own
          * @throws SendlyException if the request fails; 400
-         *         {@code invalid_request} naming the field the API rejected,
-         *         409 {@code agent_limit} when the workspace already has 20
+         *         {@code invalid_request} naming the field the API rejected
+         *         ({@code connection.<field>: <reason>} for a connection
+         *         rule), 403 {@code byo_agents_not_enabled} when your own
+         *         agents are not switched on for the workspace, 409
+         *         {@code agent_limit} when the workspace already has 20
          *         agents
          */
         public VoiceAgent create(CreateVoiceAgentRequest request) throws SendlyException {
@@ -297,7 +307,7 @@ public class VoiceResource {
             }
             requireText(request.getName(), "An agent 'name' is required");
 
-            JsonObject response = client.post("/voice/agents", request.toJson(), idempotencyKeyOf(options));
+            JsonObject response = client.post("/voice/agents", new JsonBodyWithNulls(request.toJson()), idempotencyKeyOf(options));
             return new VoiceAgent(response);
         }
 
@@ -317,15 +327,20 @@ public class VoiceResource {
 
         /**
          * Update an agent. Only the fields you set are sent; tool settings
-         * you leave out keep their current values. Changes apply to the next
-         * call the agent takes.
+         * you leave out keep their current values, and so do connection
+         * fields while the kind stays the same. Changes apply to the next
+         * call the agent takes. The agent comes back with a signing secret
+         * when one was just made (switching to one of your own kinds, or
+         * {@code rotateSigningSecret}); save it now, it is never shown again.
          *
          * @param id      The agent's id
-         * @param request Any subset of the create fields
+         * @param request Any subset of the create fields, and {@code rotateSigningSecret}
          * @return The agent after the change
          * @throws SendlyException if the request fails; 400
-         *         {@code invalid_request} naming the field the API rejected,
-         *         404 {@code agent_not_found}
+         *         {@code invalid_request} naming the field the API rejected
+         *         (also {@code rotateSigningSecret} on a {@code sendly}
+         *         agent), 403 {@code byo_agents_not_enabled}, 404
+         *         {@code agent_not_found}
          */
         public VoiceAgent update(String id, UpdateVoiceAgentRequest request) throws SendlyException {
             return update(id, request, null);
@@ -346,7 +361,7 @@ public class VoiceResource {
                 throw new ValidationException("Request is required");
             }
 
-            JsonObject response = client.patch(path, request.toJson(), idempotencyKeyOf(options));
+            JsonObject response = client.patch(path, new JsonBodyWithNulls(request.toJson()), idempotencyKeyOf(options));
             return new VoiceAgent(response);
         }
 

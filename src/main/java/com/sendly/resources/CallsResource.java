@@ -15,8 +15,8 @@ import com.sendly.models.ListCallsOptions;
  * Calls resource: phone calls handled by your AI agents.
  * <p>
  * Place an outbound call that one of your agents talks on, list and inspect
- * calls (with the transcript of an agent-handled call), end a call, and fetch
- * a recording. Which numbers can call is configured with {@code voice()} or in
+ * calls (with the transcript of an agent-handled call), transfer the caller on
+ * an incoming call to another number, end a call, and fetch a recording. Which numbers can call is configured with {@code voice()} or in
  * the dashboard: switch voice on for a number, pick how it answers, and
  * register its emergency address. {@code voice().numbers().list()} reports
  * each number's voice settings so you can find a {@code from} number.
@@ -74,7 +74,9 @@ public class CallsResource {
      *         {@code insufficient_credits} when the balance does not cover a
      *         minute, 428 {@code e911_required} until the number has an
      *         emergency address, 409 {@code lines_busy} when every line is in
-     *         use; see {@code CallErrorCode} for the full list
+     *         use, 409 {@code agent_kind_unsupported} when the agent's kind
+     *         is {@code sip} or {@code websocket} (those answer incoming
+     *         calls only); see {@code CallErrorCode} for the full list
      */
     public Call create(CreateCallRequest request) throws SendlyException {
         return create(request, null);
@@ -118,7 +120,7 @@ public class CallsResource {
      * they are returned, so a ring past its deadline shows as
      * {@code no_answer}.
      *
-     * @param options Filters (status, direction, kind, agentId, to, from) and
+     * @param options Filters (status, direction, kind, agentId, agentKind, to, from) and
      *                paging (limit 1 to 100, offset); may be null
      * @return One page of calls
      * @throws SendlyException if the request fails; 400
@@ -175,6 +177,81 @@ public class CallsResource {
     public Call hangup(String id, IdempotentRequestOptions options) throws SendlyException {
         requireId(id);
         JsonObject response = client.post("/calls/" + PathParams.encode(id) + "/hangup", new JsonObject(), idempotencyKeyOf(options));
+        return new Call(response);
+    }
+
+    /**
+     * Transfer the caller on an incoming phone call to the agent's transfer
+     * number ({@code tools.transferTo}), whatever kind of agent is on the
+     * call. See {@link #transfer(String, String, IdempotentRequestOptions)}.
+     *
+     * @param id The call's id
+     * @return The call, {@code transfer.status} "pending"
+     * @throws SendlyException if the request fails; 400
+     *         {@code transfer_to_required} when the agent has no transfer
+     *         number
+     */
+    public Call transfer(String id) throws SendlyException {
+        return transfer(id, null, null);
+    }
+
+    /**
+     * Transfer the caller on an incoming phone call to a number. See
+     * {@link #transfer(String, String, IdempotentRequestOptions)}.
+     *
+     * @param id The call's id
+     * @param to The number to transfer the caller to, in E.164; {@code null}
+     *           uses the agent's transfer number
+     * @return The call, {@code transfer.status} "pending"
+     * @throws SendlyException if the request fails
+     */
+    public Call transfer(String id, String to) throws SendlyException {
+        return transfer(id, to, null);
+    }
+
+    /**
+     * Transfer the caller on an incoming phone call to another number, with
+     * per-call options. Works whatever kind of agent is on the call.
+     * <p>
+     * {@code to} is a US or Canadian number in E.164 that is not
+     * premium-rate, not the number the caller dialled and not a number the
+     * agent answers. Left {@code null}, the caller goes to the agent's
+     * transfer number ({@code tools.transferTo}); any other number needs
+     * calling out switched on for the workspace. The call is returned at
+     * once (202) with {@code getTransfer().getStatus()} "pending"; follow the
+     * outcome with {@link #get(String)}. Once the caller is handed over the
+     * call ends {@code completed} with {@code hangupClass} "transferred"; a
+     * failed transfer leaves the caller on the call.
+     * </p>
+     * <p>
+     * An idempotency key is generated automatically and reused across the
+     * SDK's own retries unless you supply your own.
+     * </p>
+     *
+     * @param id      The call's id
+     * @param to      The number to transfer the caller to, in E.164;
+     *                {@code null} uses the agent's transfer number
+     * @param options Per-call options (optional idempotency key)
+     * @return The call, {@code transfer.status} "pending"
+     * @throws SendlyException if the request fails; 400
+     *         {@code invalid_request} for a {@code to} that breaks the rules
+     *         above, 400 {@code transfer_to_required} when no number was
+     *         given and the agent has none, 402 {@code insufficient_credits}
+     *         when the workspace has no credits left, 403
+     *         {@code outbound_not_enabled} when {@code to} is not the
+     *         agent's transfer number and calling out is off, 404
+     *         {@code call_not_found}, 409 {@code call_not_active},
+     *         {@code call_not_transferable} (not an incoming phone call) or
+     *         {@code transfer_in_progress} (a transfer is under way, or the
+     *         call has had 3 transfer attempts)
+     */
+    public Call transfer(String id, String to, IdempotentRequestOptions options) throws SendlyException {
+        requireId(id);
+        JsonObject body = new JsonObject();
+        if (to != null) {
+            body.addProperty("to", to);
+        }
+        JsonObject response = client.post("/calls/" + PathParams.encode(id) + "/transfer", body, idempotencyKeyOf(options));
         return new Call(response);
     }
 
