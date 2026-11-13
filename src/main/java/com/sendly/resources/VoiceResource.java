@@ -8,10 +8,12 @@ import com.sendly.models.CreateVoiceAgentRequest;
 import com.sendly.models.DeletedVoiceAgent;
 import com.sendly.models.EmergencyAddress;
 import com.sendly.models.IdempotentRequestOptions;
+import com.sendly.models.TestVoiceAgentRequest;
 import com.sendly.models.UpdateVoiceAgentRequest;
 import com.sendly.models.UpdateVoiceNumberRequest;
 import com.sendly.models.VoiceAgent;
 import com.sendly.models.VoiceAgentListResponse;
+import com.sendly.models.VoiceAgentTest;
 import com.sendly.models.VoiceListResponse;
 import com.sendly.models.VoiceNumber;
 import com.sendly.models.VoiceNumberListResponse;
@@ -363,6 +365,57 @@ public class VoiceResource {
 
             JsonObject response = client.patch(path, new JsonBodyWithNulls(request.toJson()), idempotencyKeyOf(options));
             return new VoiceAgent(response);
+        }
+
+        /**
+         * Test your own agent's saved connection the way a call would reach
+         * it, without placing one.
+         *
+         * @param id The agent's id
+         * @return What the test found; check {@code isOk()}
+         * @throws SendlyException if the request fails
+         * @see #test(String, TestVoiceAgentRequest)
+         */
+        public VoiceAgentTest test(String id) throws SendlyException {
+            return test(id, null);
+        }
+
+        /**
+         * Test your own agent's connection the way a call would reach it,
+         * without placing one.
+         * <p>
+         * {@code custom_llm} gets a signed, streamed chat completion with a
+         * test message. {@code websocket} gets a signed connection with
+         * {@code connected}, a {@code start} carrying {@code test: true},
+         * half a second of silence and a {@code stop} with reason
+         * {@code test_finished}. {@code sip} gets an {@code OPTIONS} request,
+         * answered with the saved credentials if the server asks; a SIP
+         * server answering shows the address and credentials work, not which
+         * agent picks up.
+         * </p>
+         * <p>
+         * Pass a {@code connection} to test settings before saving them. A
+         * workspace can run 10 tests a minute. The request carries no
+         * idempotency key.
+         * </p>
+         *
+         * @param id      The agent's id
+         * @param request Settings to test instead of the saved ones, or
+         *                {@code null} to test the saved connection
+         * @return What the test found; check {@code isOk()}
+         * @throws SendlyException if the request fails; 400
+         *         {@code invalid_request} when the agent is a {@code sendly}
+         *         agent and no {@code kind} was sent, or the connection breaks
+         *         a rule, 403 {@code byo_agents_not_enabled} when your own
+         *         agents are not switched on for the workspace, 404
+         *         {@code agent_not_found}, 429 after 10 tests in a minute
+         */
+        public VoiceAgentTest test(String id, TestVoiceAgentRequest request) throws SendlyException {
+            String path = agentPath(id) + "/test";
+            JsonObject body = request != null ? request.toJson() : new JsonObject();
+
+            JsonObject response = client.post(path, new JsonBodyWithNulls(body), null, false);
+            return new VoiceAgentTest(response);
         }
 
         /**

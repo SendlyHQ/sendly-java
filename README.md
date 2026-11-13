@@ -1743,6 +1743,23 @@ own = client.voice().agents().update(own.getId(), UpdateVoiceAgentRequest.builde
     .rotateSigningSecret(true)
     .build());
 
+// Test the connection the way a call would reach it, without placing one.
+// Pass settings to try them before saving; nothing is saved.
+VoiceAgentTest check = client.voice().agents().test(own.getId());
+if (!check.isOk()) {
+    System.out.println(check.getOutcome() + ": " + check.getMessage());
+    for (VoiceAgentTestStep step : check.getSteps()) {
+        System.out.println((step.isOk() ? "ok   " : "fail ") + step.getStep() + " " + step.getDetail());
+    }
+}
+client.voice().agents().test(own.getId(), TestVoiceAgentRequest.builder()
+    .kind(VoiceAgentKind.SIP)
+    .connection(VoiceAgentConnectionInput.builder()
+        .uri("sip:+15125550100@sip.example.com")
+        .transport("tls")
+        .build())
+    .build());
+
 // Ring the team instead, then delete the agent
 client.voice().numbers().update("+15125550147", UpdateVoiceNumberRequest.builder()
     .voiceMode(VoiceMode.RING_DASHBOARD)
@@ -1767,6 +1784,14 @@ returned: `hasApiKey()`, `hasPassword()` and `hasAuthToken()` say whether one
 is saved. `getSigningSecret()` is set only on the response that made it
 (creating your own agent, switching to one, or `rotateSigningSecret(true)`).
 Switching the kind to `sendly` removes the connection and the signing secret.
+
+`agents().test(id)` checks your own agent without placing a call:
+`custom_llm` gets a signed, streamed chat completion, `websocket` a signed
+connection with a short test stream, and `sip` an `OPTIONS` request. A failed
+test is still a successful request, so check `isOk()`; `getOutcome()` is a
+`VoiceAgentTestOutcome` value (more may be added) and `getSteps()` lists each
+step tried, up to the first that failed. A workspace can run 10 tests a
+minute. The test is not idempotent, so it carries no idempotency key.
 
 Refusals carry `getApiErrorCode()` as usual: 400 `ValidationException`
 (`invalid_request`, `invalid_voice_mode`, `agent_required`, `invalid_address`,

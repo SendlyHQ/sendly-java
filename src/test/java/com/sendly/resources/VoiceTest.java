@@ -10,6 +10,7 @@ import com.sendly.models.CreateVoiceAgentRequest;
 import com.sendly.models.DeletedVoiceAgent;
 import com.sendly.models.EmergencyAddress;
 import com.sendly.models.IdempotentRequestOptions;
+import com.sendly.models.TestVoiceAgentRequest;
 import com.sendly.models.UpdateVoiceAgentRequest;
 import com.sendly.models.UpdateVoiceNumberRequest;
 import com.sendly.models.Voice;
@@ -18,6 +19,10 @@ import com.sendly.models.VoiceAgentConnection;
 import com.sendly.models.VoiceAgentConnectionInput;
 import com.sendly.models.VoiceAgentKind;
 import com.sendly.models.VoiceAgentListResponse;
+import com.sendly.models.VoiceAgentTest;
+import com.sendly.models.VoiceAgentTestOutcome;
+import com.sendly.models.VoiceAgentTestStep;
+import com.sendly.models.VoiceAgentTestStepName;
 import com.sendly.models.VoiceAgentTools;
 import com.sendly.models.VoiceListResponse;
 import com.sendly.models.VoiceMode;
@@ -769,6 +774,124 @@ class VoiceTest {
         assertEquals("custom_llm", VoiceAgentKind.CUSTOM_LLM);
         assertEquals("sip", VoiceAgentKind.SIP);
         assertEquals("websocket", VoiceAgentKind.WEBSOCKET);
+    }
+
+    private static final String AGENT_TEST_JSON =
+        "{\"ok\":true,\"outcome\":\"ok\",\"message\":\"Your agent's server answered in 84 ms.\"," +
+        "\"status\":200,\"latencyMs\":84,\"signed\":false,\"steps\":[" +
+        "{\"step\":\"address\",\"ok\":true,\"detail\":\"sip.example.com points to a public server.\"}," +
+        "{\"step\":\"connect\",\"ok\":true,\"detail\":\"Connected over TLS to sip.example.com:5061 in 41 ms.\"}," +
+        "{\"step\":\"reply\",\"ok\":true,\"detail\":\"SIP 200 OK\"}]}";
+
+    @Test
+    void testAgentsTest_noArgs_postsEmptyObjectWithoutIdempotencyKey() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_TEST_JSON));
+
+        VoiceAgentTest result = client.voice().agents().test(AGENT_ID);
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("POST", request.getMethod());
+        assertTrue(request.getPath().endsWith("/voice/agents/" + AGENT_ID + "/test"));
+        assertEquals("{}", request.getBody().readUtf8());
+        assertNull(request.getHeader("Idempotency-Key"));
+
+        assertTrue(result.isOk());
+        assertEquals(VoiceAgentTestOutcome.OK, result.getOutcome());
+        assertEquals("Your agent's server answered in 84 ms.", result.getMessage());
+        assertEquals(Integer.valueOf(200), result.getStatus());
+        assertEquals(Integer.valueOf(84), result.getLatencyMs());
+        assertFalse(result.isSigned());
+        assertEquals(3, result.getSteps().size());
+        VoiceAgentTestStep first = result.getSteps().get(0);
+        assertEquals(VoiceAgentTestStepName.ADDRESS, first.getStep());
+        assertTrue(first.isOk());
+        assertEquals("sip.example.com points to a public server.", first.getDetail());
+        assertEquals(VoiceAgentTestStepName.REPLY, result.getSteps().get(2).getStep());
+    }
+
+    @Test
+    void testAgentsTest_withSettings_sendsKindConnectionAndInstructions() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_TEST_JSON));
+
+        client.voice().agents().test(AGENT_ID, TestVoiceAgentRequest.builder()
+                .kind(VoiceAgentKind.SIP)
+                .connection(VoiceAgentConnectionInput.builder()
+                        .uri("sip:+15125550100@sip.example.com")
+                        .transport("tls")
+                        .build())
+                .instructions("Answer questions about opening hours.")
+                .build());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertNull(request.getHeader("Idempotency-Key"));
+        JsonObject body = bodyOf(request);
+        assertEquals(3, body.size());
+        assertEquals("sip", body.get("kind").getAsString());
+        JsonObject connection = body.getAsJsonObject("connection");
+        assertEquals(2, connection.size());
+        assertEquals("sip:+15125550100@sip.example.com", connection.get("uri").getAsString());
+        assertEquals("tls", connection.get("transport").getAsString());
+        assertEquals("Answer questions about opening hours.", body.get("instructions").getAsString());
+    }
+
+    @Test
+    void testAgentsTest_emptyRequest_postsEmptyObject() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(AGENT_TEST_JSON));
+
+        client.voice().agents().test(AGENT_ID, TestVoiceAgentRequest.builder().build());
+
+        assertEquals("{}", mockServer.takeRequest().getBody().readUtf8());
+    }
+
+    @Test
+    void testAgentsTest_failedTest_keepsUnknownOutcomeAndStep() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+                "{\"ok\":false,\"outcome\":\"proxy_refused\",\"message\":\"Something new happened.\"," +
+                "\"status\":null,\"latencyMs\":null,\"signed\":true,\"steps\":[" +
+                "{\"step\":\"address\",\"ok\":true,\"detail\":\"agent.example.com points to a public server.\"}," +
+                "{\"step\":\"handshake\",\"ok\":false,\"detail\":\"A new kind of step failed.\"}]}"));
+
+        VoiceAgentTest result = client.voice().agents().test(AGENT_ID);
+
+        assertFalse(result.isOk());
+        assertEquals("proxy_refused", result.getOutcome());
+        assertNull(result.getStatus());
+        assertNull(result.getLatencyMs());
+        assertTrue(result.isSigned());
+        assertEquals(2, result.getSteps().size());
+        assertEquals("handshake", result.getSteps().get(1).getStep());
+        assertFalse(result.getSteps().get(1).isOk());
+    }
+
+    @Test
+    void testAgentsTest_missingId_throwsValidationException() {
+        assertThrows(ValidationException.class, () -> client.voice().agents().test(" "));
+        assertEquals(0, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testAgentsTest_404AgentNotFound_throwsNotFoundException() {
+        mockServer.enqueue(apiError(404, "agent_not_found", "Agent not found"));
+
+        assertThrows(NotFoundException.class, () -> client.voice().agents().test(AGENT_ID));
+    }
+
+    @Test
+    void testAgentTestConstants_matchTheWire() {
+        assertEquals("ok", VoiceAgentTestOutcome.OK);
+        assertEquals("blocked_destination", VoiceAgentTestOutcome.BLOCKED_DESTINATION);
+        assertEquals("unreachable", VoiceAgentTestOutcome.UNREACHABLE);
+        assertEquals("timeout", VoiceAgentTestOutcome.TIMEOUT);
+        assertEquals("tls_failed", VoiceAgentTestOutcome.TLS_FAILED);
+        assertEquals("auth_required", VoiceAgentTestOutcome.AUTH_REQUIRED);
+        assertEquals("auth_failed", VoiceAgentTestOutcome.AUTH_FAILED);
+        assertEquals("not_found", VoiceAgentTestOutcome.NOT_FOUND);
+        assertEquals("rejected", VoiceAgentTestOutcome.REJECTED);
+        assertEquals("bad_reply", VoiceAgentTestOutcome.BAD_REPLY);
+        assertEquals("address", VoiceAgentTestStepName.ADDRESS);
+        assertEquals("connect", VoiceAgentTestStepName.CONNECT);
+        assertEquals("login", VoiceAgentTestStepName.LOGIN);
+        assertEquals("reply", VoiceAgentTestStepName.REPLY);
     }
 
     @Test
