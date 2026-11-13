@@ -25,20 +25,20 @@ numbers, verification, and everything around them.
 <dependency>
     <groupId>live.sendly</groupId>
     <artifactId>sendly-java</artifactId>
-    <version>4.6.0</version>
+    <version>4.7.0</version>
 </dependency>
 ```
 
 ### Gradle (Groovy)
 
 ```groovy
-implementation 'live.sendly:sendly-java:4.6.0'
+implementation 'live.sendly:sendly-java:4.7.0'
 ```
 
 ### Gradle (Kotlin)
 
 ```kotlin
-implementation("live.sendly:sendly-java:4.6.0")
+implementation("live.sendly:sendly-java:4.7.0")
 ```
 
 ## Quick Start
