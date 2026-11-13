@@ -12,6 +12,7 @@ public class ScheduleMessageRequest {
     private final String from;
     private final String messageType;
     private final Map<String, Object> metadata;
+    private final String timezone;
 
     /**
      * Create a new schedule message request.
@@ -60,12 +61,18 @@ public class ScheduleMessageRequest {
      * @param metadata    Custom metadata to attach to the message (max 4KB)
      */
     public ScheduleMessageRequest(String to, String text, String scheduledAt, String from, String messageType, Map<String, Object> metadata) {
+        this(to, text, scheduledAt, from, messageType, metadata, null);
+    }
+
+    private ScheduleMessageRequest(String to, String text, String scheduledAt, String from, String messageType,
+                                   Map<String, Object> metadata, String timezone) {
         this.to = to;
         this.text = text;
         this.scheduledAt = scheduledAt;
         this.from = from;
         this.messageType = messageType;
         this.metadata = metadata;
+        this.timezone = timezone;
     }
 
     public String getTo() {
@@ -92,6 +99,10 @@ public class ScheduleMessageRequest {
         return metadata;
     }
 
+    public String getTimezone() {
+        return timezone;
+    }
+
     /**
      * Create a builder for ScheduleMessageRequest.
      */
@@ -109,6 +120,7 @@ public class ScheduleMessageRequest {
         private String from;
         private String messageType;
         private Map<String, Object> metadata;
+        private String timezone;
 
         public Builder to(String to) {
             this.to = to;
@@ -150,8 +162,23 @@ public class ScheduleMessageRequest {
             return this;
         }
 
+        /**
+         * Set a time zone label, such as {@code America/New_York}.
+         * <p>
+         * It is stored with the message and returned as sent (the API uses
+         * {@code UTC} when it is left out). It does not change how
+         * {@code scheduledAt} is read: give {@code scheduledAt} its own offset
+         * or {@code Z}.
+         *
+         * @param timezone An IANA time zone name
+         */
+        public Builder timezone(String timezone) {
+            this.timezone = timezone;
+            return this;
+        }
+
         public ScheduleMessageRequest build() {
-            return new ScheduleMessageRequest(to, text, scheduledAt, from, messageType, metadata);
+            return new ScheduleMessageRequest(to, text, scheduledAt, from, messageType, metadata, timezone);
         }
     }
 }

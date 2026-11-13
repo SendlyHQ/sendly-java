@@ -6,6 +6,7 @@ import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
 import com.sendly.models.CreateWhatsAppSignupRequest;
 import com.sendly.models.CreateWhatsAppTemplateRequest;
+import com.sendly.models.IdempotentRequestOptions;
 import com.sendly.models.UpdateWhatsAppConversationalComponentsRequest;
 import com.sendly.models.UpdateWhatsAppSenderProfileRequest;
 import com.sendly.models.UpdateWhatsAppTemplateRequest;
@@ -237,12 +238,28 @@ public class WhatsAppResource {
          *                         day
          */
         public WhatsAppSignupSession create(String phoneNumber) throws SendlyException {
+            return create(phoneNumber, null);
+        }
+
+        /**
+         * Start connecting a number to WhatsApp, with per-call options.
+         * <p>
+         * Same as {@link #create(String)}. Repeating the call with the same
+         * idempotency key within 24 hours returns the first answer instead of
+         * starting the signup again.
+         *
+         * @param phoneNumber The number to connect, in E.164 format
+         * @param options     Per-call options (optional idempotency key)
+         * @return The signup with its {@code connectUrl}
+         * @throws SendlyException if the request fails
+         */
+        public WhatsAppSignupSession create(String phoneNumber, IdempotentRequestOptions options) throws SendlyException {
             validatePhone(phoneNumber);
 
             Map<String, Object> body = new HashMap<>();
             body.put("phoneNumber", phoneNumber);
 
-            JsonObject response = client.post("/whatsapp/signup", body);
+            JsonObject response = client.post("/whatsapp/signup", body, idempotencyKeyOf(options));
             return new WhatsAppSignupSession(response);
         }
 
@@ -296,6 +313,27 @@ public class WhatsAppResource {
          *         {@code id}.
          */
         public WhatsAppSignupSession create(CreateWhatsAppSignupRequest request) throws SendlyException {
+            return create(request, null);
+        }
+
+        /**
+         * Start connecting a number, or add one to a connected WhatsApp
+         * Business Account, with per-call options.
+         * <p>
+         * Same as {@link #create(CreateWhatsAppSignupRequest)}. With
+         * {@code businessAccountId} the request is still never retried
+         * automatically on a 5xx, a timeout or a network error; call again
+         * with the same idempotency key to get the first answer back instead
+         * of starting, and charging, a new signup.
+         *
+         * @param request The number, and for an addition the account id and
+         *                optional verification method and display name
+         * @param options Per-call options (optional idempotency key)
+         * @return The signup: a {@code connectUrl} for a Facebook
+         *         connection, or {@code verifying} for an addition
+         * @throws SendlyException if the request fails
+         */
+        public WhatsAppSignupSession create(CreateWhatsAppSignupRequest request, IdempotentRequestOptions options) throws SendlyException {
             if (request == null) {
                 throw new ValidationException("Request is required");
             }
@@ -306,7 +344,7 @@ public class WhatsAppResource {
                 throw new ValidationException("businessAccountId must be a non-empty string");
             }
             boolean addition = businessAccountId != null && !businessAccountId.isEmpty();
-            JsonObject response = client.post("/whatsapp/signup", request, null, true, !addition);
+            JsonObject response = client.post("/whatsapp/signup", request, idempotencyKeyOf(options), true, !addition);
             return new WhatsAppSignupSession(response);
         }
 
@@ -734,6 +772,23 @@ public class WhatsAppResource {
          *         404 {@code whatsapp_sender_not_connected}, checked first.
          */
         public WhatsAppTemplate create(CreateWhatsAppTemplateRequest request) throws SendlyException {
+            return create(request, null);
+        }
+
+        /**
+         * Create a template and submit it to Meta for review, with per-call
+         * options.
+         * <p>
+         * Same as {@link #create(CreateWhatsAppTemplateRequest)}. Repeating
+         * the call with the same idempotency key within 24 hours returns the
+         * first answer instead of creating the template again.
+         *
+         * @param request The template definition
+         * @param options Per-call options (optional idempotency key)
+         * @return The created template (status {@code PENDING})
+         * @throws SendlyException if the request fails
+         */
+        public WhatsAppTemplate create(CreateWhatsAppTemplateRequest request, IdempotentRequestOptions options) throws SendlyException {
             if (request == null) {
                 throw new ValidationException("Request is required");
             }
@@ -751,7 +806,7 @@ public class WhatsAppResource {
                 throw new ValidationException("Template body is required");
             }
 
-            JsonObject response = client.post("/whatsapp/templates", request);
+            JsonObject response = client.post("/whatsapp/templates", request, idempotencyKeyOf(options));
             return new WhatsAppTemplate(response);
         }
 
@@ -818,6 +873,10 @@ public class WhatsAppResource {
     private static String contentTypeOf(String filename) {
         String contentType = URLConnection.guessContentTypeFromName(filename);
         return contentType != null ? contentType : "application/octet-stream";
+    }
+
+    private static String idempotencyKeyOf(IdempotentRequestOptions options) {
+        return options != null ? options.getIdempotencyKey() : null;
     }
 
     private static String encodePathParam(String param) {

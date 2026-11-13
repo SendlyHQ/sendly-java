@@ -37,6 +37,7 @@ public class ScheduledMessage {
     private final Instant sentAt;
 
     private final String error;
+    private final String timezone;
 
     /**
      * Create a ScheduledMessage from a JSON object.
@@ -53,6 +54,7 @@ public class ScheduledMessage {
         this.cancelledAt = parseInstant(getStringOrNull(json, "cancelledAt", "cancelled_at"));
         this.sentAt = parseInstant(getStringOrNull(json, "sentAt", "sent_at"));
         this.error = getStringOrNull(json, "error");
+        this.timezone = getStringOrNull(json, "timezone");
     }
 
     private String getStringOrNull(JsonObject json, String key) {
@@ -126,6 +128,15 @@ public class ScheduledMessage {
 
     public String getError() {
         return error;
+    }
+
+    /**
+     * The time zone the message was scheduled with: the {@code timezone}
+     * sent, or {@code UTC}. A label only; {@link #getScheduledAt()} is the
+     * instant it goes. Null when the API returns none.
+     */
+    public String getTimezone() {
+        return timezone;
     }
 
     // Helper methods

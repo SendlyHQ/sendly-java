@@ -1,5 +1,6 @@
 package com.sendly.models;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -45,24 +46,43 @@ public class UpdateWhatsAppTemplateRequest {
             return this;
         }
 
-        /** Replacement footer. */
+        /** Replacement footer. An empty string removes the footer. */
         public Builder footer(String footer) {
             this.footer = footer;
             return this;
         }
 
+        /** Remove the template's footer (sends an empty {@code footer}). */
+        public Builder clearFooter() {
+            this.footer = "";
+            return this;
+        }
+
         /**
          * Replacement text header. It can't contain {@code {{n}}} variables
-         * ({@code template_header_variable_unsupported}).
+         * ({@code template_header_variable_unsupported}). An empty string
+         * removes the header.
          */
         public Builder header(String header) {
             this.header = header;
             return this;
         }
 
-        /** Replacement buttons. */
+        /** Remove the template's header (sends an empty {@code header}). */
+        public Builder clearHeader() {
+            this.header = "";
+            return this;
+        }
+
+        /** Replacement buttons. An empty list removes every button. */
         public Builder buttons(List<WhatsAppTemplateButton> buttons) {
             this.buttons = buttons;
+            return this;
+        }
+
+        /** Remove every button from the template (sends an empty {@code buttons} list). */
+        public Builder clearButtons() {
+            this.buttons = new ArrayList<>();
             return this;
         }
 

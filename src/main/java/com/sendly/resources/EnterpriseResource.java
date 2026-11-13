@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import com.sendly.Sendly;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
+import com.sendly.models.ListWorkspacesOptions;
 import com.sendly.models.VerificationSubmitInput;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -89,22 +90,49 @@ public class EnterpriseResource {
     }
 
     public JsonObject uploadVerificationDocument(File file, String workspaceId, String verificationId) throws SendlyException {
+        return uploadVerificationDocument(file, workspaceId, verificationId, null);
+    }
+
+    /**
+     * Upload a business registration document with an explicit content type.
+     * <p>
+     * The API accepts only {@code image/png}, {@code image/jpeg},
+     * {@code image/gif}, {@code image/webp} and {@code application/pdf}, up
+     * to 10 MB. Without a content type it is taken from the file's extension
+     * ({@code .png}, {@code .jpg}, {@code .jpeg}, {@code .gif}, {@code .webp}
+     * or {@code .pdf}); pass one for a file named otherwise.
+     *
+     * @param file           The document
+     * @param workspaceId    Optional workspace whose verification gets the document
+     * @param verificationId Optional verification that gets the document
+     * @param contentType    The document's content type, such as {@code image/png}; null to use the extension
+     * @return The stored document's {@code url} and {@code id}
+     * @throws SendlyException if the request fails
+     */
+    public JsonObject uploadVerificationDocument(File file, String workspaceId, String verificationId,
+                                                 String contentType) throws SendlyException {
         if (file == null || !file.exists()) {
             throw new ValidationException("A valid file is required");
         }
 
-        String contentType = "application/octet-stream";
-        String name = file.getName().toLowerCase();
-        if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
-        else if (name.endsWith(".png")) contentType = "image/png";
-        else if (name.endsWith(".gif")) contentType = "image/gif";
-        else if (name.endsWith(".pdf")) contentType = "application/pdf";
-        else if (name.endsWith(".webp")) contentType = "image/webp";
+        if (contentType == null || contentType.trim().isEmpty()) {
+            contentType = "application/octet-stream";
+            String name = file.getName().toLowerCase();
+            if (name.endsWith(".jpg") || name.endsWith(".jpeg")) contentType = "image/jpeg";
+            else if (name.endsWith(".png")) contentType = "image/png";
+            else if (name.endsWith(".gif")) contentType = "image/gif";
+            else if (name.endsWith(".pdf")) contentType = "application/pdf";
+            else if (name.endsWith(".webp")) contentType = "image/webp";
+        }
+        MediaType mediaType = MediaType.parse(contentType.trim());
+        if (mediaType == null) {
+            throw new ValidationException("Invalid content type: " + contentType);
+        }
 
         MultipartBody.Builder bodyBuilder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("file", file.getName(),
-                        RequestBody.create(file, MediaType.parse(contentType)));
+                        RequestBody.create(file, mediaType));
 
         if (workspaceId != null && !workspaceId.isEmpty()) {
             bodyBuilder.addFormDataPart("workspaceId", workspaceId);
@@ -143,6 +171,17 @@ public class EnterpriseResource {
 
         public JsonObject list() throws SendlyException {
             return client.get("/enterprise/workspaces", null);
+        }
+
+        /**
+         * List workspaces with filters, sorting and paging.
+         *
+         * @param options Filters to send; null lists with the API's defaults
+         * @return The workspaces page
+         * @throws SendlyException if the request fails
+         */
+        public JsonObject list(ListWorkspacesOptions options) throws SendlyException {
+            return client.get("/enterprise/workspaces", options != null ? options.toParams() : null);
         }
 
         public JsonObject get(String workspaceId) throws SendlyException {

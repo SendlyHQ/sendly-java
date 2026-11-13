@@ -326,6 +326,31 @@ class MessagesTest {
     }
 
     @Test
+    void testGet_readsMessageFormatBatchIdAndMedia() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_mms\",\"to\":\"+15555550100\",\"from\":\"+15555550199\",\"text\":\"Your receipt\"," +
+            "\"status\":\"delivered\",\"direction\":\"outbound\",\"error\":null,\"errorCode\":null,\"retryCount\":0," +
+            "\"segments\":1,\"creditsUsed\":4,\"isSandbox\":false,\"createdAt\":\"2026-11-01T10:00:00.000Z\"," +
+            "\"deliveredAt\":\"2026-11-01T10:00:02.000Z\",\"message_format\":\"mms\",\"messageFormat\":\"mms\"," +
+            "\"batch_id\":\"batch_1\",\"batchId\":\"batch_1\"," +
+            "\"media_urls\":[\"https://cdn.example.com/r.png\"],\"mediaUrls\":[\"https://cdn.example.com/r.png\"]}"
+        ));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"msg_sms\",\"to\":\"+15555550100\",\"text\":\"Hi\",\"status\":\"sent\"}"
+        ));
+
+        Message mms = client.messages().get("msg_mms");
+        assertEquals(Message.FORMAT_MMS, mms.getMessageFormat());
+        assertEquals("batch_1", mms.getBatchId());
+        assertEquals(List.of("https://cdn.example.com/r.png"), mms.getMediaUrls());
+        assertTrue(mockServer.takeRequest().getPath().endsWith("/messages/msg_mms"));
+
+        Message bare = client.messages().get("msg_sms");
+        assertNull(bare.getMessageFormat());
+        assertNull(bare.getBatchId());
+    }
+
+    @Test
     void testGet_nullId_throwsValidationException() {
         assertThrows(ValidationException.class, () -> {
             client.messages().get(null);

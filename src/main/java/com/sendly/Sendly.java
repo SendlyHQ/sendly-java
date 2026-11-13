@@ -23,6 +23,7 @@ import com.sendly.resources.TenDlcResource;
 import com.sendly.resources.LinksResource;
 import com.sendly.resources.WhatsAppResource;
 import com.sendly.resources.RcsResource;
+import com.sendly.resources.ShortCodesResource;
 import com.sendly.resources.CallsResource;
 import com.sendly.resources.VoiceResource;
 import okhttp3.*;
@@ -89,6 +90,7 @@ public class Sendly {
     private final LinksResource links;
     private final WhatsAppResource whatsapp;
     private final RcsResource rcs;
+    private final ShortCodesResource shortCodes;
     private final CallsResource calls;
     private final VoiceResource voice;
 
@@ -146,6 +148,7 @@ public class Sendly {
         this.links = new LinksResource(this);
         this.whatsapp = new WhatsAppResource(this);
         this.rcs = new RcsResource(this);
+        this.shortCodes = new ShortCodesResource(this);
         this.calls = new CallsResource(this);
         this.voice = new VoiceResource(this);
     }
@@ -319,6 +322,16 @@ public class Sendly {
      */
     public RcsResource rcs() {
         return rcs;
+    }
+
+    /**
+     * Get the Short Codes resource (apply for a US short code and track the
+     * application).
+     *
+     * @return Short Codes resource
+     */
+    public ShortCodesResource shortCodes() {
+        return shortCodes;
     }
 
     /**

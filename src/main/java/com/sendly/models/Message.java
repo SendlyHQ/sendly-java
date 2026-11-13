@@ -31,6 +31,12 @@ public class Message {
     public static final String SENDER_TYPE_ALPHANUMERIC = "alphanumeric";
     public static final String SENDER_TYPE_SANDBOX = "sandbox";
 
+    // Message format constants
+    public static final String FORMAT_SMS = "sms";
+    public static final String FORMAT_MMS = "mms";
+    public static final String FORMAT_WHATSAPP = "whatsapp";
+    public static final String FORMAT_RCS = "rcs";
+
     private final String id;
     private final String to;
     private final String from;
@@ -86,6 +92,12 @@ public class Message {
 
     private final String fallbackOf;
 
+    @SerializedName("message_format")
+    private final String messageFormat;
+
+    @SerializedName("batch_id")
+    private final String batchId;
+
     /**
      * Create a Message from a JSON object.
      */
@@ -118,6 +130,8 @@ public class Message {
         this.fallback = json.has("fallback") && json.get("fallback").isJsonObject()
                 ? new WhatsAppSmsFallback(json.getAsJsonObject("fallback")) : null;
         this.fallbackOf = getStringOrNull(json, "fallbackOf", "fallback_of");
+        this.messageFormat = getStringOrNull(json, "messageFormat", "message_format");
+        this.batchId = getStringOrNull(json, "batchId", "batch_id");
     }
 
     private String errorMessageOf(JsonObject json) {
@@ -316,6 +330,23 @@ public class Message {
      */
     public String getFallbackOf() {
         return fallbackOf;
+    }
+
+    /**
+     * The channel and format the message was sent in: {@code sms},
+     * {@code mms}, {@code whatsapp} or {@code rcs} (see the {@code FORMAT_}
+     * constants). Values the API adds later come through unchanged; null
+     * when the response has none.
+     */
+    public String getMessageFormat() {
+        return messageFormat;
+    }
+
+    /**
+     * The batch that sent the message; null unless it is a batch message.
+     */
+    public String getBatchId() {
+        return batchId;
     }
 
     // Helper methods

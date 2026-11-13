@@ -282,6 +282,11 @@ System.out.println("Refunded: " + cancel.getCreditsRefunded() + " credits");
 
 `scheduledAt` must be ISO 8601, at least 5 minutes and at most 5 days in the future.
 
+`timezone("America/New_York")` on the builder stores a time zone with the
+message, returned by `getTimezone()` (`UTC` when you leave it out). It is a
+label only and does not change how `scheduledAt` is read, so give
+`scheduledAt` its own offset (`2030-01-20T10:00:00-05:00`) or `Z`.
+
 ### Batch Messages
 
 ```java
@@ -587,6 +592,9 @@ for (Conversation c : conversations) {
 
 // Filtered + paged
 ConversationListResponse active = client.conversations().list("active", 25, 0);
+
+// Only conversations with a label (status, labelId, limit, offset)
+ConversationListResponse vip = client.conversations().list(null, "lbl_vip", 25, 0);
 
 // One conversation, with its messages
 Conversation conversation = client.conversations().get("conv_abc123", true, 50, 0);
@@ -948,35 +956,57 @@ TenDlcAssignmentListResponse assignments = client.tenDlc().listAssignments();
 
 ## Short Codes
 
-> **This SDK has no short-code helpers.** There is no `client.shortCodes()`
-> resource and no short-code model. Reach the endpoints below through the
-> client's generic `get`, `post` and `put` methods (which add your API key,
-> retries and the automatic idempotency key on POSTs, and return the raw
-> `JsonObject`), or through the Sendly CLI or dashboard.
-
-Short-code applications live at these endpoints:
-
-| Method | Path | Scope |
-|--------|------|-------|
-| `GET` | `/api/v1/short_codes` | `short_codes:read` |
-| `POST` | `/api/v1/short_codes/requests` | `short_codes:write` |
-| `GET` | `/api/v1/short_codes/application` | `short_codes:read` |
-| `PUT` | `/api/v1/short_codes/application` | `short_codes:write` |
-| `POST` | `/api/v1/short_codes/application/preflight` | `short_codes:read` |
-| `POST` | `/api/v1/short_codes/application/submit` | `short_codes:write` |
-
-Paths passed to the client are relative to `/api/v1`:
+A short code is a 5 or 6 digit US sender. Getting one is an application, not
+a purchase: you fill it in, Sendly reviews it, the carrier forms are signed,
+Sendly files it, and each carrier certifies the code separately. Reads need
+the `short_codes:read` scope and writes `short_codes:write`; while short codes
+aren't enabled for the account, every call gets 404 `short_codes_not_enabled`.
 
 ```java
-import com.google.gson.JsonObject;
+import com.sendly.models.*;
 
-JsonObject shortCodes = client.get("/short_codes", null);
-JsonObject application = client.get("/short_codes/application", null);
-JsonObject preflight = client.post("/short_codes/application/preflight", null);
+// Save answers (the first save creates the application)
+ShortCodeApplicationView view = client.shortCodes().application().update(
+    ShortCodeApplicationInput.builder()
+        .useCase("Delivery alerts for Acme orders")
+        .messageFrequency("4 messages per month")
+        .sampleMessages(Arrays.asList("Acme: your order shipped. Reply STOP to opt out."))
+        .build());
+System.out.println(view.getIgnoredFields());   // fields Sendly or the carriers own
+
+// Check it against the carrier rules without changing anything
+ShortCodePreflight check = client.shortCodes().application().check();
+for (ShortCodeIssue issue : check.getIssues()) {
+    System.out.println(issue.getPath() + ": " + issue.getMessage());
+}
+
+// Submit: charges the one-time setup fee, so accept the terms
+if (check.isOk()) {
+    ShortCodeApplicationView submitted = client.shortCodes().application().submit(
+        ShortCodeApplicationInput.builder().acceptTerms(true).build(),
+        new IdempotentRequestOptions("short-code-submit-1"));
+    System.out.println(submitted.getPaymentStatus());   // "paid"
+}
+
+// Where it stands
+ShortCodeApplicationView current = client.shortCodes().application().get();
+System.out.println(current.getApplication().getReviewStatus());
+System.out.println(current.getBilling().getSetupFee().getStatus());
+
+// Every application and code; only active codes can send
+for (ShortCode code : client.shortCodes().list()) {
+    if (code.isActive()) {
+        System.out.println(code.getShortCode());
+    }
+}
 ```
 
-Check the API reference for the application body before you `put` or submit
-one; the SDK does not model it.
+`update` and `submit` also take `IdempotentRequestOptions`. Submitting twice
+is safe: the second call reports `getAlreadySubmitted()` and charges nothing.
+Submit answers 403 `verification_required` until the business is verified,
+422 `short_code_invalid_application` with every issue, and 402
+`payment_method_required`, `payment_failed` or
+`payment_requires_authentication` when the fee can't be charged.
 
 You can also follow a short-code application from Java through webhooks: the
 `short_code.action_required`, `short_code.rejected`, `short_code.filed` and
@@ -1025,6 +1055,8 @@ team workspace, connecting and sender edits need an owner or admin
 //    flight returns that signup without charging again.
 WhatsAppSignupSession signup = client.whatsapp().signup().create("+15125550188");
 System.out.println("Have your user open: " + signup.getConnectUrl());
+// To retry safely across restarts, pass your own key:
+// client.whatsapp().signup().create("+15125550188", new IdempotentRequestOptions("wa-signup-acme"));
 
 // 2. Poll until active. After the Facebook step the signup stays
 //    "registering" while WhatsApp activates the number. Activation usually
@@ -1053,7 +1085,8 @@ WhatsAppTemplate template = client.whatsapp().templates().create(
         .body("Hi {{1}}, your order {{2}} has shipped!")
         .examples(Map.of("1", "Sam", "2", "#4821"))
         .buttons(List.of(new WhatsAppTemplateButton("quick_reply", "Stop promotions")))
-        .build());
+        .build(),
+    new IdempotentRequestOptions("template-order-shipped"));   // optional
 System.out.println(template.getStatus());   // PENDING
 System.out.println(template.getWarnings()); // submission warnings, if any
 
@@ -1066,6 +1099,9 @@ client.whatsapp().templates().update(template.getId(),
         .body("Hi {{1}}, your order {{2}} is on its way!")
         .examples(Map.of("1", "Sam", "2", "#4821"))
         .build());
+// Remove the footer, header or buttons
+client.whatsapp().templates().update(template.getId(),
+    UpdateWhatsAppTemplateRequest.builder().clearFooter().clearButtons().build());
 client.whatsapp().templates().delete(template.getId());
 
 // 5. Check the 24-hour customer-service window. Free-form text and media only
@@ -1856,6 +1892,16 @@ client.webhooks().create(
     Map.of("team", "platform")
 );
 
+// Only sandbox events (MODE_TEST), only live events (MODE_LIVE, needs a
+// verified business) or both (MODE_ALL, the default)
+client.webhooks().create(
+    "https://hooks.acme.example/sendly-test",
+    Arrays.asList("message.delivered"),
+    "Sandbox receipts",
+    Webhook.MODE_TEST,
+    null
+);
+
 // List all webhooks
 List<Webhook> webhooks = client.webhooks().list();
 
@@ -1870,6 +1916,9 @@ client.webhooks().update("whk_xxx",
     null,
     null
 );
+
+// Change the mode and metadata too (url, events, description, isActive, mode, metadata)
+client.webhooks().update("whk_xxx", null, null, null, null, Webhook.MODE_LIVE, Map.of("team", "ops"));
 
 // Send a test event to it. When your endpoint fails the test, the API answers
 // 400, so this throws a ValidationException whose message says why.
@@ -1899,6 +1948,13 @@ Reset it first — redeliver and backfill are both refused with HTTP 409 while t
 circuit is open.
 
 ```java
+// See what a recovery would send, without sending anything (works while the
+// circuit is open)
+WebhookRecoveryPreview preview = client.webhooks().recoveryPreview("whk_xxx",
+    new WebhooksResource.RecoveryPreviewOptions()
+        .since(Instant.now().minus(2, ChronoUnit.DAYS).truncatedTo(ChronoUnit.SECONDS).toString()));
+System.out.println(preview.getAuditFailures().getTotal() + " " + preview.getMissingFromMessages().getTotal());
+
 // Reset the breaker
 client.webhooks().resetCircuit("whk_xxx");
 
@@ -1930,8 +1986,9 @@ for (WebhookDelivery d : failedPage) {
 client.webhooks().retryDelivery("whk_xxx", "del_abc123");
 ```
 
-Both `redeliver` and `backfill` also have a no-options overload that uses the
-server defaults, and both return raw `JsonObject` counts.
+`recoveryPreview`, `redeliver` and `backfill` also have a no-options overload
+that uses the server defaults. `redeliver` and `backfill` return raw
+`JsonObject` counts; `recoveryPreview` returns a `WebhookRecoveryPreview`.
 
 ### Receiving events
 
@@ -2063,6 +2120,19 @@ deprecated: without a timestamp there is no replay protection.
 // Get account information
 Account account = client.account().get();
 System.out.println(account.getEmail());
+
+// The workspace this key belongs to (null for a key without one). Its ID is
+// the organization_id webhook payloads carry.
+AccountOrganization workspace = account.getOrganization();
+if (workspace != null) {
+    System.out.println(workspace.getName() + " (" + workspace.getId() + ")");
+}
+
+// The business verification (null when there is none)
+AccountVerification verification = account.getVerification();
+if (verification != null) {
+    System.out.println(verification.getStatus() + " (" + verification.getType() + ")");
+}
 
 // Check credit balance
 Credits credits = client.account().getCredits();
@@ -2322,6 +2392,11 @@ less than a minute of its window is left.
 ```java
 JsonObject ws = client.enterprise().workspaces().create("Acme Insurance");
 JsonObject list = client.enterprise().workspaces().list();
+JsonObject unverified = client.enterprise().workspaces().list(ListWorkspacesOptions.builder()
+    .verification("unverified")
+    .sort("name_asc")
+    .limit(100)
+    .build());
 JsonObject detail = client.enterprise().workspaces().get("ws_xxx");
 client.enterprise().workspaces().suspend("ws_xxx", "non-payment");
 client.enterprise().workspaces().resume("ws_xxx");

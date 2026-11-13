@@ -53,7 +53,68 @@ class AccountTest {
         assertEquals("user_1", account.getId());
         assertEquals("dev@example.com", account.getEmail());
         assertEquals("2026-01-01T00:00:00.000Z", account.getCreatedAt());
+        assertNotNull(account.getOrganization());
+        assertEquals("org_1", account.getOrganization().getId());
+        assertEquals("Acme", account.getOrganization().getName());
+        assertFalse(account.getOrganization().isPersonal());
+        assertNull(account.getVerification());
         assertEquals("/api/v1/account", mockServer.takeRequest().getPath());
+    }
+
+    @Test
+    void testGet_readsTheBusinessVerification() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"user\":{\"id\":\"user_1\",\"email\":\"dev@example.com\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"},"
+                + "\"organization\":{\"id\":\"org_1\",\"name\":\"Acme\",\"isPersonal\":false},"
+                + "\"verification\":{\"status\":\"verified\",\"type\":\"toll_free\",\"region\":\"us\","
+                + "\"submittedAt\":\"2026-01-02T00:00:00.000Z\",\"updatedAt\":\"2026-01-04T00:00:00.000Z\"}}"
+        ));
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"user\":{\"id\":\"user_1\",\"email\":\"dev@example.com\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"},"
+                + "\"verification\":{\"status\":\"pending\",\"type\":\"international\",\"region\":null,"
+                + "\"submittedAt\":\"2026-01-02T00:00:00.000Z\",\"updatedAt\":\"2026-01-02T00:00:00.000Z\"}}"
+        ));
+
+        Account verified = client.account().get();
+        assertNotNull(verified.getVerification());
+        assertEquals("verified", verified.getVerification().getStatus());
+        assertEquals("toll_free", verified.getVerification().getType());
+        assertEquals("us", verified.getVerification().getRegion());
+        assertEquals("2026-01-02T00:00:00.000Z", verified.getVerification().getSubmittedAt());
+        assertEquals("2026-01-04T00:00:00.000Z", verified.getVerification().getUpdatedAt());
+
+        Account pending = client.account().get();
+        assertEquals("pending", pending.getVerification().getStatus());
+        assertEquals("international", pending.getVerification().getType());
+        assertNull(pending.getVerification().getRegion());
+    }
+
+    @Test
+    void testGet_organizationIsNullForAKeyWithoutAWorkspace() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"user\":{\"id\":\"user_1\",\"email\":\"dev@example.com\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"},"
+                + "\"organization\":null,\"credits\":{\"balance\":\"0\",\"reservedBalance\":\"0\"},\"verification\":null,"
+                + "\"apiKey\":{\"id\":\"key_1\",\"name\":\"CI\",\"type\":\"test\",\"scopes\":[\"sms:send\"]},"
+                + "\"limits\":{\"messagesPerMinute\":60,\"messagesPerDay\":100}}"
+        ));
+
+        Account account = client.account().get();
+
+        assertEquals("user_1", account.getId());
+        assertNull(account.getOrganization());
+    }
+
+    @Test
+    void testGet_readsAPersonalWorkspace() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"user\":{\"id\":\"user_1\",\"email\":\"dev@example.com\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"},"
+                + "\"organization\":{\"id\":\"org_2\",\"name\":\"Personal\",\"isPersonal\":true}}"
+        ));
+
+        Account account = client.account().get();
+
+        assertEquals("org_2", account.getOrganization().getId());
+        assertTrue(account.getOrganization().isPersonal());
     }
 
     @Test

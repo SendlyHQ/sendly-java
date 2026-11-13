@@ -43,6 +43,23 @@ public class WebhooksResource {
      * @return Created webhook with signing secret
      */
     public WebhookCreatedResponse create(String url, List<String> events, String description, Map<String, Object> metadata) throws SendlyException {
+        return create(url, events, description, null, metadata);
+    }
+
+    /**
+     * Create a new webhook endpoint with a mode.
+     *
+     * @param url HTTPS endpoint URL
+     * @param events Event types to subscribe to
+     * @param description Optional description
+     * @param mode Optional event mode: {@link Webhook#MODE_ALL} (the
+     *             default), {@link Webhook#MODE_TEST} (sandbox events only)
+     *             or {@link Webhook#MODE_LIVE} (live events only, needs a
+     *             verified business)
+     * @param metadata Optional metadata
+     * @return Created webhook with signing secret
+     */
+    public WebhookCreatedResponse create(String url, List<String> events, String description, String mode, Map<String, Object> metadata) throws SendlyException {
         if (url == null || !url.startsWith("https://")) {
             throw new ValidationException("Webhook URL must be HTTPS");
         }
@@ -56,6 +73,7 @@ public class WebhooksResource {
         events.forEach(eventsArray::add);
         body.add("events", eventsArray);
         if (description != null) body.addProperty("description", description);
+        if (mode != null) body.addProperty("mode", mode);
         if (metadata != null) body.add("metadata", client.getGson().toJsonTree(metadata));
 
         JsonObject response = client.post("/webhooks", body);
@@ -87,6 +105,26 @@ public class WebhooksResource {
      * Update a webhook configuration.
      */
     public Webhook update(String webhookId, String url, List<String> events, String description, Boolean isActive) throws SendlyException {
+        return update(webhookId, url, events, description, isActive, null, null);
+    }
+
+    /**
+     * Update a webhook configuration, including its mode and metadata.
+     * A null argument leaves that field as it is.
+     *
+     * @param webhookId Webhook ID
+     * @param url New HTTPS endpoint URL
+     * @param events New event types (replaces the subscribed events)
+     * @param description New description
+     * @param isActive Whether deliveries are on
+     * @param mode New event mode: {@link Webhook#MODE_ALL},
+     *             {@link Webhook#MODE_TEST} or {@link Webhook#MODE_LIVE}
+     *             (live needs a verified business)
+     * @param metadata New metadata
+     * @return The updated webhook
+     */
+    public Webhook update(String webhookId, String url, List<String> events, String description, Boolean isActive,
+                          String mode, Map<String, Object> metadata) throws SendlyException {
         validateWebhookId(webhookId);
         if (url != null && !url.startsWith("https://")) {
             throw new ValidationException("Webhook URL must be HTTPS");
@@ -101,6 +139,8 @@ public class WebhooksResource {
         }
         if (description != null) body.addProperty("description", description);
         if (isActive != null) body.addProperty("is_active", isActive);
+        if (mode != null) body.addProperty("mode", mode);
+        if (metadata != null) body.add("metadata", client.getGson().toJsonTree(metadata));
 
         JsonObject response = client.patch("/webhooks/" + PathParams.encode(webhookId), body);
         return new Webhook(response);
@@ -179,6 +219,47 @@ public class WebhooksResource {
 
     public JsonObject backfill(String webhookId) throws SendlyException {
         return backfill(webhookId, null);
+    }
+
+    /**
+     * Preview a recovery: count what {@link #redeliver(String, RedeliverOptions)}
+     * and {@link #backfill(String, BackfillOptions)} would send for a window,
+     * without sending anything. The window is at most 7 days long.
+     *
+     * @param webhookId Webhook ID
+     * @param options   Optional window and event types; pass {@code null}
+     *                  for the last 24 hours and every event type
+     * @return The preview
+     */
+    public WebhookRecoveryPreview recoveryPreview(String webhookId, RecoveryPreviewOptions options) throws SendlyException {
+        validateWebhookId(webhookId);
+        Map<String, String> params = options != null ? options.toParams() : new HashMap<>();
+        JsonObject response = client.get("/webhooks/" + PathParams.encode(webhookId) + "/recovery-preview",
+                params.isEmpty() ? null : params);
+        return new WebhookRecoveryPreview(response);
+    }
+
+    public WebhookRecoveryPreview recoveryPreview(String webhookId) throws SendlyException {
+        return recoveryPreview(webhookId, null);
+    }
+
+    /** Options for {@link #recoveryPreview(String, RecoveryPreviewOptions)}. */
+    public static final class RecoveryPreviewOptions {
+        private String since;
+        private String until;
+        private java.util.List<String> eventTypes;
+
+        public RecoveryPreviewOptions since(String since) { this.since = since; return this; }
+        public RecoveryPreviewOptions until(String until) { this.until = until; return this; }
+        public RecoveryPreviewOptions eventTypes(java.util.List<String> eventTypes) { this.eventTypes = eventTypes; return this; }
+
+        Map<String, String> toParams() {
+            Map<String, String> params = new HashMap<>();
+            if (since != null) params.put("since", since);
+            if (until != null) params.put("until", until);
+            if (eventTypes != null && !eventTypes.isEmpty()) params.put("event_types", String.join(",", eventTypes));
+            return params;
+        }
     }
 
     /** Options for {@link #redeliver(String, RedeliverOptions)}. */

@@ -43,11 +43,28 @@ public class ConversationsResource {
      * @throws SendlyException if the request fails
      */
     public ConversationListResponse list(String status, int limit, int offset) throws SendlyException {
+        return list(status, null, limit, offset);
+    }
+
+    /**
+     * List conversations with a label filter.
+     *
+     * @param status  Filter by status ("active" or "closed"), or null
+     * @param labelId Only conversations with this label id, or null
+     * @param limit   Maximum conversations to return
+     * @param offset  Number of conversations to skip
+     * @return List of conversations
+     * @throws SendlyException if the request fails
+     */
+    public ConversationListResponse list(String status, String labelId, int limit, int offset) throws SendlyException {
         Map<String, String> params = new HashMap<>();
         params.put("limit", String.valueOf(Math.min(limit, 100)));
         params.put("offset", String.valueOf(offset));
         if (status != null) {
             params.put("status", status);
+        }
+        if (labelId != null && !labelId.isEmpty()) {
+            params.put("label", labelId);
         }
 
         JsonObject response = client.get("/conversations", params);
@@ -292,7 +309,10 @@ public class ConversationsResource {
      * @param id Conversation ID
      * @return JSON response with {@code suggestions} array (each entry has
      *         {@code text} and {@code tone}), plus optional
-     *         {@code basedOnMessageId} and {@code model}.
+     *         {@code basedOnMessageId} and {@code model}. When the
+     *         workspace's enterprise account turned AI suggestions off,
+     *         {@code suggestions} is empty, {@code disabled} is {@code true}
+     *         and {@code reason} is {@code enterprise_policy}.
      * @throws SendlyException if the request fails
      */
     public JsonObject suggestReplies(String id) throws SendlyException {

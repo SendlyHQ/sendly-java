@@ -8,6 +8,7 @@ import com.sendly.TestHelpers;
 import com.sendly.exceptions.NotFoundException;
 import com.sendly.exceptions.SendlyException;
 import com.sendly.exceptions.ValidationException;
+import com.sendly.models.ListWorkspacesOptions;
 import okhttp3.mockwebserver.Dispatcher;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -15,8 +16,13 @@ import okhttp3.mockwebserver.RecordedRequest;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -247,5 +253,135 @@ class EnterpriseTest {
 
         assertEquals("Maximum 100 workspaces per bulk provision", e.getMessage());
         assertEquals(0, mockServer.getRequestCount());
+    }
+
+    @Test
+    void testUploadVerificationDocument_withContentType_sendsItOnTheFilePart(@TempDir Path dir) throws Exception {
+        File file = dir.resolve("registration").toFile();
+        Files.write(file.toPath(), new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47});
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"url\":\"https://cdn.example.com/doc.png\",\"id\":\"upload_1\"}"));
+
+        JsonObject result = client.enterprise().uploadVerificationDocument(file, null, "ver_1", "image/png");
+
+        assertEquals("upload_1", result.get("id").getAsString());
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/v1/enterprise/verification-document/upload", request.getPath());
+        String body = request.getBody().readUtf8();
+        assertTrue(body.contains("filename=\"registration\""));
+        assertTrue(body.contains("Content-Type: image/png"));
+        assertFalse(body.contains("application/octet-stream"));
+        assertTrue(body.contains("ver_1"));
+    }
+
+    @Test
+    void testUploadVerificationDocument_withoutContentType_usesTheExtension(@TempDir Path dir) throws Exception {
+        File file = dir.resolve("registration.pdf").toFile();
+        Files.write(file.toPath(), "%PDF-1.4".getBytes());
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"url\":\"https://cdn.example.com/doc.pdf\",\"id\":\"upload_2\"}"));
+
+        client.enterprise().uploadVerificationDocument(file);
+
+        String body = mockServer.takeRequest().getBody().readUtf8();
+        assertTrue(body.contains("Content-Type: application/pdf"));
+    }
+
+    @Test
+    void testWorkspacesList_withOptionsSendsTheFilters() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"workspaces\":[],\"pagination\":{\"page\":2,\"limit\":25,\"total\":0,\"totalPages\":0}}"));
+
+        client.enterprise().workspaces().list(ListWorkspacesOptions.builder()
+            .page(2)
+            .limit(25)
+            .search("acme")
+            .status("active")
+            .verification("unverified")
+            .sort("name_asc")
+            .tags(Arrays.asList("tag_1", "tag_2"))
+            .build());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("GET", request.getMethod());
+        assertEquals("/api/v1/enterprise/workspaces", request.getRequestUrl().encodedPath());
+        assertEquals("2", request.getRequestUrl().queryParameter("page"));
+        assertEquals("25", request.getRequestUrl().queryParameter("limit"));
+        assertEquals("acme", request.getRequestUrl().queryParameter("search"));
+        assertEquals("active", request.getRequestUrl().queryParameter("status"));
+        assertEquals("unverified", request.getRequestUrl().queryParameter("verification"));
+        assertEquals("name_asc", request.getRequestUrl().queryParameter("sort"));
+        assertEquals("tag_1,tag_2", request.getRequestUrl().queryParameter("tags"));
+        assertNull(request.getRequestUrl().queryParameter("compact"));
+    }
+
+    @Test
+    void testWorkspacesList_compactSendsOnlyCompact() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"workspaces\":[]}"));
+
+        client.enterprise().workspaces().list(ListWorkspacesOptions.builder().compact(true).build());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("compact=true", request.getRequestUrl().encodedQuery());
+    }
+
+    private static final String FIXTURE_SUMMARY = "\"summary\":{\"totalCredits\":1500,"
+        + "\"pendingVerifications\":[{\"id\":\"00000000-0000-4000-8000-000000000011\",\"name\":\"Bright Smiles Dental\"}],"
+        + "\"verificationBreakdown\":{\"verified\":1,\"pending\":1,\"submitted\":0,\"rejected\":0,\"unverified\":0}},"
+        + "\"maxWorkspaces\":25,\"workspacesUsed\":2";
+
+    private static void assertFixtureSummary(JsonObject page) {
+        JsonObject summary = page.getAsJsonObject("summary");
+        assertEquals(1500, summary.get("totalCredits").getAsInt());
+        JsonArray pending = summary.getAsJsonArray("pendingVerifications");
+        assertEquals(1, pending.size());
+        assertEquals("00000000-0000-4000-8000-000000000011", pending.get(0).getAsJsonObject().get("id").getAsString());
+        assertEquals("Bright Smiles Dental", pending.get(0).getAsJsonObject().get("name").getAsString());
+        JsonObject breakdown = summary.getAsJsonObject("verificationBreakdown");
+        assertEquals(1, breakdown.get("verified").getAsInt());
+        assertEquals(1, breakdown.get("pending").getAsInt());
+        assertEquals(0, breakdown.get("unverified").getAsInt());
+    }
+
+    @Test
+    void testWorkspacesList_readsTheFullListAndItsSummary() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"workspaces\":["
+            + "{\"id\":\"00000000-0000-4000-8000-000000000011\",\"name\":\"Bright Smiles Dental\","
+            + "\"slug\":\"bright-smiles-dental\",\"status\":\"active\",\"suspendedAt\":null,\"suspendReason\":null,"
+            + "\"verificationStatus\":\"pending\",\"rejectionReason\":null,\"verificationType\":\"toll_free\","
+            + "\"tollFreeNumber\":null,\"creditBalance\":0,\"keyCount\":1,\"messages30d\":0,\"delivered30d\":0,"
+            + "\"failed30d\":0,\"monthlyMessageQuota\":null,\"messagesThisMonth\":0,\"quotaResetAt\":null,"
+            + "\"createdAt\":\"2026-01-08T00:00:00.000Z\",\"tags\":[{\"id\":\"00000000-0000-4000-8000-000000000030\","
+            + "\"enterpriseAccountId\":\"00000000-0000-4000-8000-000000000031\",\"name\":\"dental\","
+            + "\"color\":\"#6366f1\",\"createdAt\":\"2026-01-01T00:00:00.000Z\"}]},"
+            + "{\"id\":\"00000000-0000-4000-8000-000000000010\",\"name\":\"Acme Clinics\",\"slug\":\"acme-clinics\","
+            + "\"status\":\"active\",\"suspendedAt\":null,\"suspendReason\":null,\"verificationStatus\":\"verified\","
+            + "\"rejectionReason\":null,\"verificationType\":\"toll_free\",\"tollFreeNumber\":\"+15555550100\","
+            + "\"creditBalance\":1500,\"keyCount\":1,\"messages30d\":120,\"delivered30d\":118,\"failed30d\":2,"
+            + "\"monthlyMessageQuota\":null,\"messagesThisMonth\":40,\"quotaResetAt\":null,"
+            + "\"createdAt\":\"2026-01-01T00:00:00.000Z\",\"tags\":[]}],"
+            + "\"pagination\":{\"total\":2,\"limit\":50,\"page\":1,\"totalPages\":1,\"hasMore\":false},"
+            + FIXTURE_SUMMARY + "}"));
+
+        JsonObject page = client.enterprise().workspaces().list();
+
+        assertEquals(2, page.getAsJsonArray("workspaces").size());
+        assertEquals(2, page.getAsJsonObject("pagination").get("total").getAsInt());
+        assertFixtureSummary(page);
+    }
+
+    @Test
+    void testWorkspacesList_readsTheCompactListAndItsSummary() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess("{\"workspaces\":["
+            + "{\"id\":\"00000000-0000-4000-8000-000000000011\",\"name\":\"Bright Smiles Dental\",\"creditBalance\":0},"
+            + "{\"id\":\"00000000-0000-4000-8000-000000000010\",\"name\":\"Acme Clinics\",\"creditBalance\":1500}],"
+            + FIXTURE_SUMMARY + "}"));
+
+        JsonObject page = client.enterprise().workspaces().list(ListWorkspacesOptions.builder().compact(true).build());
+
+        assertEquals(1500, page.getAsJsonArray("workspaces").get(1).getAsJsonObject().get("creditBalance").getAsInt());
+        assertFalse(page.has("pagination"));
+        assertFixtureSummary(page);
     }
 }

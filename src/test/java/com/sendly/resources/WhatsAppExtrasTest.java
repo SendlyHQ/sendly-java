@@ -6,7 +6,10 @@ import com.sendly.Sendly;
 import com.sendly.TestHelpers;
 import com.sendly.exceptions.*;
 import com.sendly.models.CreateWhatsAppSignupRequest;
+import com.sendly.models.CreateWhatsAppTemplateRequest;
+import com.sendly.models.IdempotentRequestOptions;
 import com.sendly.models.UpdateWhatsAppConversationalComponentsRequest;
+import com.sendly.models.UpdateWhatsAppTemplateRequest;
 import com.sendly.models.WhatsAppCallingSettings;
 import com.sendly.models.WhatsAppCommand;
 import com.sendly.models.WhatsAppConversationalComponents;
@@ -15,6 +18,7 @@ import com.sendly.models.WhatsAppSenderProfile;
 import com.sendly.models.WhatsAppSendersResponse;
 import com.sendly.models.WhatsAppSignup;
 import com.sendly.models.WhatsAppSignupSession;
+import com.sendly.models.WhatsAppTemplate;
 import com.sendly.models.WhatsAppVerificationMethod;
 import okhttp3.mockwebserver.MockResponse;
 import okhttp3.mockwebserver.MockWebServer;
@@ -759,5 +763,104 @@ class WhatsAppExtrasTest {
         assertThrows(ValidationException.class, () -> client.whatsapp().signup().resend(""));
         assertThrows(ValidationException.class, () -> client.whatsapp().signup().resend(null, "sms"));
         assertEquals(0, mockServer.getRequestCount());
+    }
+
+    // ==================== caller-supplied idempotency keys ====================
+
+    @Test
+    void testSignupCreate_withIdempotencyKey_sendsTheKey() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"was_123\",\"connectUrl\":\"https://sendly.live/whatsapp/connect?token=tok_abc\",\"status\":\"initiated\"}"
+        ).setResponseCode(201));
+
+        WhatsAppSignupSession signup = client.whatsapp().signup().create(
+            "+15125550199", new IdempotentRequestOptions("wa-signup-1"));
+
+        assertEquals("was_123", signup.getId());
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/v1/whatsapp/signup", request.getPath());
+        assertEquals("wa-signup-1", request.getHeader("Idempotency-Key"));
+        assertEquals("+15125550199", bodyOf(request).get("phoneNumber").getAsString());
+    }
+
+    @Test
+    void testSignupCreate_withoutOptions_stillSendsAnAutomaticKey() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"was_123\",\"connectUrl\":\"https://sendly.live/whatsapp/connect?token=tok_abc\",\"status\":\"initiated\"}"
+        ).setResponseCode(201));
+
+        client.whatsapp().signup().create("+15125550199");
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertTrue(request.getHeader("Idempotency-Key").startsWith("sendly-java-retry-"));
+    }
+
+    @Test
+    void testSignupCreate_toConnectedAccount_withIdempotencyKey_sendsTheKeyAndIsNotRetried() throws Exception {
+        Sendly retrying = clientWithRetries(3);
+        mockServer.enqueue(apiError(503,
+            "{\"error\":\"whatsapp_verification_start_failed\",\"message\":\"WhatsApp could not be reached\"}"));
+
+        assertThrows(SendlyException.class, () -> retrying.whatsapp().signup().create(
+            CreateWhatsAppSignupRequest.builder()
+                .phoneNumber("+15125550199")
+                .businessAccountId("102938475610")
+                .build(),
+            new IdempotentRequestOptions("wa-add-1")));
+
+        assertEquals(1, mockServer.getRequestCount());
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("wa-add-1", request.getHeader("Idempotency-Key"));
+        assertEquals("102938475610", bodyOf(request).get("businessAccountId").getAsString());
+    }
+
+    @Test
+    void testTemplatesCreate_withIdempotencyKey_sendsTheKey() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"wat_1\",\"name\":\"order_shipped\",\"language\":\"en_US\"," +
+            "\"category\":\"UTILITY\",\"status\":\"PENDING\",\"qualityRating\":null," +
+            "\"rejectionReason\":null,\"createdAt\":\"2026-07-30T10:00:00.000Z\"," +
+            "\"updatedAt\":\"2026-07-30T10:00:00.000Z\"}"
+        ).setResponseCode(201));
+
+        WhatsAppTemplate template = client.whatsapp().templates().create(
+            CreateWhatsAppTemplateRequest.builder()
+                .sender(SENDER)
+                .name("order_shipped")
+                .language("en_US")
+                .category("UTILITY")
+                .body("Your order has shipped")
+                .build(),
+            new IdempotentRequestOptions("wa-template-1"));
+
+        assertEquals("wat_1", template.getId());
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("POST", request.getMethod());
+        assertEquals("/api/v1/whatsapp/templates", request.getPath());
+        assertEquals("wa-template-1", request.getHeader("Idempotency-Key"));
+        assertEquals("order_shipped", bodyOf(request).get("name").getAsString());
+    }
+
+    @Test
+    void testTemplatesUpdate_clearSendsEmptyFooterHeaderAndButtons() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"wat_1\",\"name\":\"order_shipped\",\"language\":\"en_US\"," +
+            "\"category\":\"UTILITY\",\"status\":\"PENDING\"}"));
+
+        client.whatsapp().templates().update("wat_1", UpdateWhatsAppTemplateRequest.builder()
+            .clearFooter()
+            .clearHeader()
+            .clearButtons()
+            .build());
+
+        RecordedRequest request = mockServer.takeRequest();
+        assertEquals("PATCH", request.getMethod());
+        assertEquals("/api/v1/whatsapp/templates/wat_1", request.getPath());
+        JsonObject body = bodyOf(request);
+        assertEquals(3, body.size());
+        assertEquals("", body.get("footer").getAsString());
+        assertEquals("", body.get("header").getAsString());
+        assertEquals(0, body.getAsJsonArray("buttons").size());
     }
 }

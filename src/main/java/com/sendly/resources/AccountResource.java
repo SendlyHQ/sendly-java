@@ -37,7 +37,11 @@ public class AccountResource {
             response.getAsJsonObject("user") :
             response.has("account") ? response.getAsJsonObject("account") :
             response.has("data") ? response.getAsJsonObject("data") : response;
-        return new Account(data);
+        JsonObject organization = response.has("organization") && response.get("organization").isJsonObject() ?
+            response.getAsJsonObject("organization") : null;
+        JsonObject verification = response.has("verification") && response.get("verification").isJsonObject() ?
+            response.getAsJsonObject("verification") : null;
+        return new Account(data, organization, verification);
     }
 
     /**

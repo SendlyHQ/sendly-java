@@ -94,6 +94,39 @@ class MessagesScheduleTest {
     }
 
     @Test
+    void testSchedule_withTimezone_sendsItAndReadsItBack() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            "{\"id\":\"schd_1\",\"to\":\"+15551234567\",\"text\":\"Hi\","
+                + "\"scheduledAt\":\"2030-01-20T15:00:00.000Z\",\"timezone\":\"America/New_York\","
+                + "\"status\":\"scheduled\",\"creditsReserved\":2,\"segments\":1,"
+                + "\"senderType\":\"number_pool\",\"createdAt\":\"2030-01-19T00:00:00.000Z\"}"
+        ).setResponseCode(201));
+
+        ScheduledMessage message = client.messages().schedule(ScheduleMessageRequest.builder()
+            .to("+15551234567")
+            .text("Hi")
+            .scheduledAt("2030-01-20T10:00:00-05:00")
+            .timezone("America/New_York")
+            .build());
+
+        assertEquals("America/New_York", message.getTimezone());
+        String body = mockServer.takeRequest().getBody().readUtf8();
+        assertTrue(body.contains("\"timezone\":\"America/New_York\""));
+        assertTrue(body.contains("\"scheduledAt\":\"2030-01-20T10:00:00-05:00\""));
+    }
+
+    @Test
+    void testSchedule_withoutTimezone_leavesItOut() throws Exception {
+        mockServer.enqueue(TestHelpers.mockSuccess(
+            TestHelpers.scheduledMessageJson("sch_123", "+15551234567", "Hi", "2030-01-20T10:00:00.000Z")
+        ));
+
+        client.messages().schedule(new ScheduleMessageRequest("+15551234567", "Hi", "2030-01-20T10:00:00Z"));
+
+        assertFalse(mockServer.takeRequest().getBody().readUtf8().contains("timezone"));
+    }
+
+    @Test
     void testSchedule_invalidPhoneFormat_throwsValidationException() {
         assertThrows(ValidationException.class, () -> {
             client.messages().schedule("1234567890", "Test", "2025-01-20T10:00:00Z");
